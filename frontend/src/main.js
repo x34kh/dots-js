@@ -7,7 +7,7 @@ import { GameController } from './gameController.js';
 
 // Configuration
 const config = {
-  gridSize: 5,
+  gridSize: 10, // Default grid size (can be changed via UI)
   googleClientId: null, // Set your Google Client ID here
   serverUrl: null // Set your WebSocket server URL here
 };
