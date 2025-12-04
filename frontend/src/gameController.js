@@ -823,7 +823,10 @@ export class GameController {
   }
 
   requestRematch() {
-    if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
+    if (this.stateMachine.mode === GameMode.LOCAL) {
+      // Local mode can rematch immediately
+      this.resetGame();
+    } else if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
       this.p2p.sendRematch();
       this.resetGame();
     } else if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {

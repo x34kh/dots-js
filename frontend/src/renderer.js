@@ -10,6 +10,14 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { skinManager } from './skins.js';
 
 export class GameRenderer {
+  // Board layout constants
+  static DOT_SPACING = 1.5;
+  static BASE_FRUSTUM_SIZE = 8;
+  static BOARD_PADDING = 1.5;
+  static LARGE_BOARD_THRESHOLD = 5; // Boards larger than this use minimum zoom
+  static ZOOM_SPEED = 0.1;
+  static NEIGHBOR_ADJACENCY_DISTANCE = 2; // Maximum distance to consider neighbors adjacent
+  
   constructor(canvas, boardLogic) {
     this.canvas = canvas;
     this.boardLogic = boardLogic;
@@ -136,8 +144,7 @@ export class GameRenderer {
   handleWheel(event) {
     event.preventDefault();
     
-    const zoomSpeed = 0.1;
-    const delta = event.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+    const delta = event.deltaY > 0 ? -GameRenderer.ZOOM_SPEED : GameRenderer.ZOOM_SPEED;
     
     const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoomLevel + delta));
     
@@ -177,7 +184,7 @@ export class GameRenderer {
     
     const rect = this.canvas.getBoundingClientRect();
     const aspect = rect.width / rect.height;
-    const frustumSize = 8 / this.zoomLevel;
+    const frustumSize = GameRenderer.BASE_FRUSTUM_SIZE / this.zoomLevel;
     
     // Calculate pan delta in world coordinates
     const dx = (event.clientX - this.panStart.x) / rect.width * frustumSize * aspect;
@@ -232,7 +239,7 @@ export class GameRenderer {
     
     const rect = this.canvas.getBoundingClientRect();
     const aspect = rect.width / rect.height;
-    const frustumSize = 8 / this.zoomLevel;
+    const frustumSize = GameRenderer.BASE_FRUSTUM_SIZE / this.zoomLevel;
     
     const dx = (touch.clientX - this.panStart.x) / rect.width * frustumSize * aspect;
     const dy = -(touch.clientY - this.panStart.y) / rect.height * frustumSize;
@@ -250,7 +257,7 @@ export class GameRenderer {
    */
   updateCameraZoom() {
     const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
-    const frustumSize = 8 / this.zoomLevel;
+    const frustumSize = GameRenderer.BASE_FRUSTUM_SIZE / this.zoomLevel;
     
     this.camera.left = -frustumSize * aspect / 2;
     this.camera.right = frustumSize * aspect / 2;
@@ -273,21 +280,18 @@ export class GameRenderer {
    */
   calculateMinZoom() {
     const gridSize = this.boardLogic.gridSize;
-    const spacing = 1.5;
-    const boardSize = (gridSize - 1) * spacing;
+    const boardSize = (gridSize - 1) * GameRenderer.DOT_SPACING;
     
     const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
-    const baseFrustumSize = 8;
     
     // Calculate the zoom level needed to fit the entire board
     // We need the board + some padding to fit in the frustum
-    const padding = 1.5; // Add padding around the board
-    const requiredWidth = boardSize + padding * 2;
-    const requiredHeight = boardSize + padding * 2;
+    const requiredWidth = boardSize + GameRenderer.BOARD_PADDING * 2;
+    const requiredHeight = boardSize + GameRenderer.BOARD_PADDING * 2;
     
     // Calculate zoom needed for both dimensions
-    const zoomForWidth = (baseFrustumSize * aspect) / requiredWidth;
-    const zoomForHeight = baseFrustumSize / requiredHeight;
+    const zoomForWidth = (GameRenderer.BASE_FRUSTUM_SIZE * aspect) / requiredWidth;
+    const zoomForHeight = GameRenderer.BASE_FRUSTUM_SIZE / requiredHeight;
     
     // Use the smaller zoom to ensure both dimensions fit
     return Math.min(zoomForWidth, zoomForHeight, 1.0);
@@ -299,7 +303,7 @@ export class GameRenderer {
   resetZoomPan() {
     // For large boards, reset to minimum zoom to show entire board
     const gridSize = this.boardLogic.gridSize;
-    if (gridSize > 5) {
+    if (gridSize > GameRenderer.LARGE_BOARD_THRESHOLD) {
       this.zoomLevel = this.minZoom;
     } else {
       this.zoomLevel = 1.0;
@@ -311,14 +315,14 @@ export class GameRenderer {
 
   createBoard() {
     const gridSize = this.boardLogic.gridSize;
-    const spacing = 1.5;
+    const spacing = GameRenderer.DOT_SPACING;
     const offset = (gridSize - 1) * spacing / 2;
 
     // Calculate and set minimum zoom level based on grid size
     this.minZoom = this.calculateMinZoom();
     
     // For large boards, start at minimum zoom to show entire board
-    if (gridSize > 5) {
+    if (gridSize > GameRenderer.LARGE_BOARD_THRESHOLD) {
       this.zoomLevel = this.minZoom;
       this.updateCameraZoom();
     }
@@ -616,7 +620,7 @@ export class GameRenderer {
         
         // Only create triangle if the two neighbors are adjacent to each other
         const dist = Math.abs(n1.dx - n2.dx) + Math.abs(n1.dy - n2.dy);
-        if (dist <= 2) { // Adjacent neighbors (including diagonal adjacency)
+        if (dist <= GameRenderer.NEIGHBOR_ADJACENCY_DISTANCE) {
           const n1Idx = vertexMap.get(n1.key);
           const n2Idx = vertexMap.get(n2.key);
           
