@@ -30,6 +30,15 @@ export class GameRenderer {
     this.defaultEmissive = new THREE.Color(0x2a2a3a);
     this.capturedColor = new THREE.Color(0x1a1a2a);
     
+    // Zoom and pan state
+    this.zoomLevel = 1.0;
+    this.minZoom = 0.5; // Will be calculated in createBoard based on grid size
+    this.maxZoom = 3.0;
+    this.panOffset = new THREE.Vector2(0, 0);
+    this.isPanning = false;
+    this.panStart = new THREE.Vector2();
+    this.panStartOffset = new THREE.Vector2();
+    
     this.init();
   }
 
@@ -97,12 +106,226 @@ export class GameRenderer {
 
     // Handle resize
     window.addEventListener('resize', () => this.handleResize());
+    
+    // Set up zoom and pan event handlers
+    this.setupZoomPanControls();
+  }
+  
+  /**
+   * Set up mouse wheel zoom and pan controls
+   */
+  setupZoomPanControls() {
+    // Mouse wheel zoom
+    this.canvas.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
+    
+    // Pan controls - mouse down, move, up
+    this.canvas.addEventListener('mousedown', (e) => this.handlePanStart(e));
+    this.canvas.addEventListener('mousemove', (e) => this.handlePanMove(e));
+    this.canvas.addEventListener('mouseup', () => this.handlePanEnd());
+    this.canvas.addEventListener('mouseleave', () => this.handlePanEnd());
+    
+    // Touch pan controls for mobile
+    this.canvas.addEventListener('touchstart', (e) => this.handleTouchPanStart(e), { passive: false });
+    this.canvas.addEventListener('touchmove', (e) => this.handleTouchPanMove(e), { passive: false });
+    this.canvas.addEventListener('touchend', () => this.handlePanEnd());
+  }
+  
+  /**
+   * Handle mouse wheel for zoom
+   */
+  handleWheel(event) {
+    event.preventDefault();
+    
+    const zoomSpeed = 0.1;
+    const delta = event.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+    
+    const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoomLevel + delta));
+    
+    if (newZoom !== this.zoomLevel) {
+      this.zoomLevel = newZoom;
+      this.updateCameraZoom();
+    }
+  }
+  
+  /**
+   * Handle pan start on mouse down
+   */
+  handlePanStart(event) {
+    // Only pan with left mouse button
+    if (event.button !== 0) return;
+    
+    // Check if clicking on a dot - if so, don't start panning
+    this.getMousePosition(event);
+    const dot = this.getDotAtMouse();
+    
+    if (dot && this.isDotMeshClickable(dot)) {
+      // User is clicking on a dot, don't pan
+      return;
+    }
+    
+    this.isPanning = true;
+    this.panStart.set(event.clientX, event.clientY);
+    this.panStartOffset.copy(this.panOffset);
+    this.canvas.style.cursor = 'grabbing';
+  }
+  
+  /**
+   * Handle pan movement
+   */
+  handlePanMove(event) {
+    if (!this.isPanning) return;
+    
+    const rect = this.canvas.getBoundingClientRect();
+    const aspect = rect.width / rect.height;
+    const frustumSize = 8 / this.zoomLevel;
+    
+    // Calculate pan delta in world coordinates
+    const dx = (event.clientX - this.panStart.x) / rect.width * frustumSize * aspect;
+    const dy = -(event.clientY - this.panStart.y) / rect.height * frustumSize;
+    
+    this.panOffset.set(
+      this.panStartOffset.x + dx,
+      this.panStartOffset.y + dy
+    );
+    
+    this.updateCameraPosition();
+  }
+  
+  /**
+   * Handle pan end
+   */
+  handlePanEnd() {
+    if (this.isPanning) {
+      this.isPanning = false;
+      this.canvas.style.cursor = 'default';
+    }
+  }
+  
+  /**
+   * Handle touch pan start
+   */
+  handleTouchPanStart(event) {
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      
+      // Check if touching on a dot
+      this.getMousePosition({ clientX: touch.clientX, clientY: touch.clientY });
+      const dot = this.getDotAtMouse();
+      
+      if (!dot || !this.isDotMeshClickable(dot)) {
+        event.preventDefault();
+        this.isPanning = true;
+        this.panStart.set(touch.clientX, touch.clientY);
+        this.panStartOffset.copy(this.panOffset);
+      }
+    }
+  }
+  
+  /**
+   * Handle touch pan movement
+   */
+  handleTouchPanMove(event) {
+    if (!this.isPanning || event.touches.length !== 1) return;
+    
+    event.preventDefault();
+    const touch = event.touches[0];
+    
+    const rect = this.canvas.getBoundingClientRect();
+    const aspect = rect.width / rect.height;
+    const frustumSize = 8 / this.zoomLevel;
+    
+    const dx = (touch.clientX - this.panStart.x) / rect.width * frustumSize * aspect;
+    const dy = -(touch.clientY - this.panStart.y) / rect.height * frustumSize;
+    
+    this.panOffset.set(
+      this.panStartOffset.x + dx,
+      this.panStartOffset.y + dy
+    );
+    
+    this.updateCameraPosition();
+  }
+  
+  /**
+   * Update camera zoom level
+   */
+  updateCameraZoom() {
+    const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
+    const frustumSize = 8 / this.zoomLevel;
+    
+    this.camera.left = -frustumSize * aspect / 2;
+    this.camera.right = frustumSize * aspect / 2;
+    this.camera.top = frustumSize / 2;
+    this.camera.bottom = -frustumSize / 2;
+    this.camera.updateProjectionMatrix();
+  }
+  
+  /**
+   * Update camera position for panning
+   */
+  updateCameraPosition() {
+    this.camera.position.x = -this.panOffset.x;
+    this.camera.position.y = -this.panOffset.y;
+    this.camera.updateProjectionMatrix();
+  }
+  
+  /**
+   * Calculate minimum zoom level to fit all dots in view
+   */
+  calculateMinZoom() {
+    const gridSize = this.boardLogic.gridSize;
+    const spacing = 1.5;
+    const boardSize = (gridSize - 1) * spacing;
+    
+    const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
+    const baseFrustumSize = 8;
+    
+    // Calculate the zoom level needed to fit the entire board
+    // We need the board + some padding to fit in the frustum
+    const padding = 1.5; // Add padding around the board
+    const requiredWidth = boardSize + padding * 2;
+    const requiredHeight = boardSize + padding * 2;
+    
+    // Calculate zoom needed for both dimensions
+    const zoomForWidth = (baseFrustumSize * aspect) / requiredWidth;
+    const zoomForHeight = baseFrustumSize / requiredHeight;
+    
+    // Use the smaller zoom to ensure both dimensions fit
+    return Math.min(zoomForWidth, zoomForHeight, 1.0);
+  }
+  
+  /**
+   * Reset zoom and pan to default
+   */
+  resetZoomPan() {
+    // For large boards, reset to minimum zoom to show entire board
+    const gridSize = this.boardLogic.gridSize;
+    if (gridSize > 5) {
+      this.zoomLevel = this.minZoom;
+    } else {
+      this.zoomLevel = 1.0;
+    }
+    this.panOffset.set(0, 0);
+    this.updateCameraZoom();
+    this.updateCameraPosition();
   }
 
   createBoard() {
     const gridSize = this.boardLogic.gridSize;
     const spacing = 1.5;
     const offset = (gridSize - 1) * spacing / 2;
+
+    // Calculate and set minimum zoom level based on grid size
+    this.minZoom = this.calculateMinZoom();
+    
+    // For large boards, start at minimum zoom to show entire board
+    if (gridSize > 5) {
+      this.zoomLevel = this.minZoom;
+      this.updateCameraZoom();
+    }
+    
+    // Reset pan offset
+    this.panOffset.set(0, 0);
+    this.updateCameraPosition();
 
     // Create grid background
     this.createGridBackground(gridSize, spacing, offset);
@@ -306,7 +529,7 @@ export class GameRenderer {
 
   /**
    * Create a mesh showing the captured area
-   * Creates a polygon connecting the boundary dots and fills the enclosed space
+   * Uses cell-based approach to fill each captured cell for accurate complex shapes
    * Supports pattern textures based on the current skin
    */
   createCapturedAreaMesh(capturedDots, playerNum) {
@@ -315,10 +538,18 @@ export class GameRenderer {
     const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
     
-    // Find boundary dots (owned dots adjacent to captured dots - including diagonals)
+    if (capturedDots.length === 0) return;
+    
+    // Convert grid coords to world coords
+    const worldX = (gx) => gx * spacing - offset;
+    const worldY = (gy) => gy * spacing - offset;
+    
+    // Create a set for quick lookup of captured dots
+    const capturedSet = new Set(capturedDots.map(d => `${d.x},${d.y}`));
+    
+    // Find all boundary dots (owned dots adjacent to captured dots)
     const boundaryDots = new Set();
     for (const { x, y } of capturedDots) {
-      // Check all 8 neighbors (orthogonal and diagonal)
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue;
@@ -334,46 +565,105 @@ export class GameRenderer {
       }
     }
     
-    // Convert boundary dots to array of positions
-    const boundaryPositions = Array.from(boundaryDots).map(key => {
+    // Get all relevant points (captured dots + boundary dots)
+    const allPoints = new Set([...capturedSet, ...boundaryDots]);
+    
+    // Create triangles connecting captured dots with their boundary dots
+    // Using cell-based triangulation for each captured dot
+    const vertices = [];
+    const indices = [];
+    const vertexMap = new Map(); // Map point key to vertex index
+    
+    // Build vertices array
+    for (const key of allPoints) {
       const [xStr, yStr] = key.split(',');
-      return { x: parseInt(xStr), y: parseInt(yStr) };
-    });
-    
-    // Sort boundary dots to form a proper polygon (angular sort around centroid)
-    const sortedBoundary = this.sortPointsForPolygon(boundaryPositions);
-    
-    // Need at least 3 points to form a polygon
-    if (sortedBoundary.length < 3) {
-      return;
+      const x = parseInt(xStr);
+      const y = parseInt(yStr);
+      vertexMap.set(key, vertices.length / 3);
+      vertices.push(worldX(x), worldY(y), 0);
     }
     
-    // Create a polygon shape connecting the boundary dots
-    const shape = new THREE.Shape();
-    
-    // Convert grid coords to world coords
-    const worldX = (gx) => gx * spacing - offset;
-    const worldY = (gy) => gy * spacing - offset;
-    
-    // Move to first point
-    shape.moveTo(worldX(sortedBoundary[0].x), worldY(sortedBoundary[0].y));
-    
-    // Draw lines to remaining points
-    for (let i = 1; i < sortedBoundary.length; i++) {
-      shape.lineTo(worldX(sortedBoundary[i].x), worldY(sortedBoundary[i].y));
+    // For each captured dot, create triangles with its neighbors
+    for (const { x, y } of capturedDots) {
+      const centerKey = `${x},${y}`;
+      const centerIdx = vertexMap.get(centerKey);
+      
+      // Get all adjacent points (both captured and boundary)
+      const neighbors = [];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          const nKey = `${nx},${ny}`;
+          if (allPoints.has(nKey)) {
+            neighbors.push({ x: nx, y: ny, key: nKey, dx, dy });
+          }
+        }
+      }
+      
+      // Sort neighbors by angle for consistent triangulation
+      neighbors.sort((a, b) => {
+        const angleA = Math.atan2(a.dy, a.dx);
+        const angleB = Math.atan2(b.dy, b.dx);
+        return angleA - angleB;
+      });
+      
+      // Create triangles between center and each pair of adjacent neighbors
+      for (let i = 0; i < neighbors.length; i++) {
+        const n1 = neighbors[i];
+        const n2 = neighbors[(i + 1) % neighbors.length];
+        
+        // Only create triangle if the two neighbors are adjacent to each other
+        const dist = Math.abs(n1.dx - n2.dx) + Math.abs(n1.dy - n2.dy);
+        if (dist <= 2) { // Adjacent neighbors (including diagonal adjacency)
+          const n1Idx = vertexMap.get(n1.key);
+          const n2Idx = vertexMap.get(n2.key);
+          
+          if (n1Idx !== undefined && n2Idx !== undefined) {
+            indices.push(centerIdx, n1Idx, n2Idx);
+          }
+        }
+      }
     }
     
-    // Close the shape
-    shape.lineTo(worldX(sortedBoundary[0].x), worldY(sortedBoundary[0].y));
+    // Also create triangles for cells where all 4 corners are in our point set
+    // This ensures we fill rectangular areas properly
+    for (const { x, y } of capturedDots) {
+      // Check 4 possible cells that this captured dot is part of
+      const cells = [
+        { corners: [[x, y], [x+1, y], [x+1, y+1], [x, y+1]] }, // bottom-left cell
+        { corners: [[x-1, y], [x, y], [x, y+1], [x-1, y+1]] }, // bottom-right cell
+        { corners: [[x-1, y-1], [x, y-1], [x, y], [x-1, y]] }, // top-right cell
+        { corners: [[x, y-1], [x+1, y-1], [x+1, y], [x, y]] }  // top-left cell
+      ];
+      
+      for (const cell of cells) {
+        const cornerKeys = cell.corners.map(([cx, cy]) => `${cx},${cy}`);
+        const allCornersExist = cornerKeys.every(k => allPoints.has(k));
+        
+        if (allCornersExist) {
+          const [c0, c1, c2, c3] = cornerKeys.map(k => vertexMap.get(k));
+          // Two triangles to fill the quad
+          if (c0 !== undefined && c1 !== undefined && c2 !== undefined && c3 !== undefined) {
+            indices.push(c0, c1, c2);
+            indices.push(c0, c2, c3);
+          }
+        }
+      }
+    }
     
-    const geometry = new THREE.ShapeGeometry(shape);
+    // Create geometry
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
     
     // Get pattern texture if available from current skin
     const patternTexture = skinManager.getPatternTexture(playerNum);
     
     let material;
     if (patternTexture) {
-      // Use textured material with pattern
       material = new THREE.MeshBasicMaterial({
         map: patternTexture,
         transparent: true,
@@ -381,7 +671,6 @@ export class GameRenderer {
         side: THREE.DoubleSide
       });
     } else {
-      // Use solid color material
       material = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
@@ -620,14 +909,16 @@ export class GameRenderer {
   handleResize() {
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
-    const aspect = width / height;
-    const frustumSize = 8;
-
-    this.camera.left = -frustumSize * aspect / 2;
-    this.camera.right = frustumSize * aspect / 2;
-    this.camera.top = frustumSize / 2;
-    this.camera.bottom = -frustumSize / 2;
-    this.camera.updateProjectionMatrix();
+    
+    // Recalculate minimum zoom for new aspect ratio
+    this.minZoom = this.calculateMinZoom();
+    
+    // Clamp current zoom to valid range
+    this.zoomLevel = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoomLevel));
+    
+    // Update camera with current zoom level
+    this.updateCameraZoom();
+    this.updateCameraPosition();
 
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
@@ -682,5 +973,8 @@ export class GameRenderer {
     }
     
     this.hoverDot = null;
+    
+    // Reset zoom and pan
+    this.resetZoomPan();
   }
 }
