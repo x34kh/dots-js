@@ -149,6 +149,10 @@ Configure these secrets in your repository settings:
 
 | Secret | Description |
 |--------|-------------|
+| `REGISTRY_URL` | Container registry URL (e.g., `registry.example.com`) |
+| `REGISTRY_USERNAME` | Registry username |
+| `REGISTRY_PASSWORD` | Registry password or token |
+| `REGISTRY_IMAGE_PREFIX` | Image prefix/path (e.g., `dots-js` or `myorg/dots-js`) |
 | `KUBECONFIG` | Base64-encoded kubeconfig for cluster access |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `ANONYMOUS_SECRET` | Secret for anonymous cookie signing |

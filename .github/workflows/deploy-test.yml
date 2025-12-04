@@ -5,15 +5,14 @@ on:
     branches-ignore: [main]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository }}
+  REGISTRY: ${{ secrets.REGISTRY_URL }}
+  IMAGE_PREFIX: ${{ secrets.REGISTRY_IMAGE_PREFIX }}
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
 
     outputs:
       frontend-image: ${{ steps.meta-frontend.outputs.tags }}
@@ -31,8 +30,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Set output variables
         id: vars
@@ -100,8 +99,8 @@ jobs:
       - name: Deploy to Kubernetes
         env:
           IMAGE_TAG: test-${{ needs.build-and-push.outputs.image-tag }}
-          REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_PREFIX: ${{ github.repository }}
+          REGISTRY: ${{ secrets.REGISTRY_URL }}
+          IMAGE_PREFIX: ${{ secrets.REGISTRY_IMAGE_PREFIX }}
         run: |
           # Create namespace if it doesn't exist
           kubectl create namespace dots-test --dry-run=client -o yaml | kubectl apply -f -
