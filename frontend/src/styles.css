@@ -33,12 +33,15 @@ body {
 
 #player-info {
   position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
-  gap: 30px;
+  justify-content: space-between;
+  padding: 0 20px;
+  pointer-events: none;
 }
 
 .player-card {
@@ -52,6 +55,20 @@ body {
   backdrop-filter: blur(10px);
   pointer-events: auto;
   min-width: 120px;
+}
+
+#player1-card {
+  position: fixed;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+#player2-card {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .player-card.active {
@@ -91,6 +108,10 @@ body {
 }
 
 .turn-indicator {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   padding: 10px 20px;
   background: linear-gradient(135deg, #00ffff33, #ff00ff33);
   border-radius: 10px;
@@ -100,6 +121,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 2px;
   animation: pulse 1.5s ease-in-out infinite;
+  pointer-events: auto;
 }
 
 @keyframes pulse {
