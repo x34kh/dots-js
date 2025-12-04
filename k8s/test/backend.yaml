@@ -23,7 +23,7 @@ spec:
             - containerPort: 8080
           env:
             - name: NODE_ENV
-              value: "development"
+              value: "test"
             - name: PORT
               value: "8080"
             - name: REDIS_URL
