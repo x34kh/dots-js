@@ -9,6 +9,7 @@ import { GameRenderer } from './renderer.js';
 import { P2PNetwork, URLSignaling } from './p2p.js';
 import { WebSocketClient } from './websocket.js';
 import { GoogleAuth } from './auth.js';
+import { skinManager, SKINS } from './skins.js';
 
 export class GameController {
   constructor(config = {}) {
@@ -40,6 +41,7 @@ export class GameController {
     this.setupInputEvents();
     this.setupStateMachineEvents();
     this.setupGridSizeSelector();
+    this.setupSkinSelector();
 
     // Initialize auth (optional)
     try {
@@ -105,6 +107,11 @@ export class GameController {
     document.getElementById('btn-forfeit').addEventListener('click', () => {
       this.forfeitGame();
     });
+
+    // Skins button
+    document.getElementById('btn-skins').addEventListener('click', () => {
+      this.showSkinSelector();
+    });
   }
 
   setupGridSizeSelector() {
@@ -128,6 +135,100 @@ export class GameController {
     document.getElementById('btn-back-to-menu').addEventListener('click', () => {
       this.hideGridSizeSelector();
     });
+  }
+
+  setupSkinSelector() {
+    // Close button
+    document.getElementById('btn-close-skins').addEventListener('click', () => {
+      this.hideSkinSelector();
+    });
+
+    // Populate skin list
+    this.populateSkinList();
+  }
+
+  showSkinSelector() {
+    document.getElementById('game-menu').classList.add('hidden');
+    document.getElementById('skin-selector').classList.remove('hidden');
+    this.populateSkinList();
+  }
+
+  hideSkinSelector() {
+    document.getElementById('skin-selector').classList.add('hidden');
+    document.getElementById('game-menu').classList.remove('hidden');
+  }
+
+  populateSkinList() {
+    const skinList = document.getElementById('skin-list');
+    skinList.innerHTML = '';
+
+    const skins = skinManager.getAllSkins();
+    const currentSkinId = skinManager.currentSkin;
+
+    for (const skin of skins) {
+      const isOwned = skinManager.isSkinOwned(skin.id);
+      const isSelected = skin.id === currentSkinId;
+
+      const skinItem = document.createElement('div');
+      skinItem.className = `skin-item${isSelected ? ' selected' : ''}${!isOwned ? ' locked' : ''}`;
+      skinItem.dataset.skinId = skin.id;
+
+      // Get colors from skin
+      const color1 = skin.player1.dotColor.toString(16).padStart(6, '0');
+      const color2 = skin.player2.dotColor.toString(16).padStart(6, '0');
+
+      skinItem.innerHTML = `
+        <div class="skin-preview">
+          <div class="skin-preview-dot" style="background-color: #${color1}"></div>
+          <div class="skin-preview-dot" style="background-color: #${color2}"></div>
+        </div>
+        <div class="skin-info">
+          <div class="skin-name">${skin.name}</div>
+          <div class="skin-description">${skin.description}</div>
+        </div>
+        <div class="skin-status ${isOwned ? 'owned' : 'price'}">
+          ${isOwned ? (isSelected ? '✓ Active' : 'Owned') : `${skin.price} coins`}
+        </div>
+      `;
+
+      skinItem.addEventListener('click', () => {
+        this.handleSkinClick(skin.id);
+      });
+
+      skinList.appendChild(skinItem);
+    }
+  }
+
+  handleSkinClick(skinId) {
+    if (skinManager.isSkinOwned(skinId)) {
+      // Select the skin
+      skinManager.selectSkin(skinId);
+      skinManager.clearTextureCache();
+      
+      // Update renderer colors
+      if (this.renderer) {
+        this.renderer.updateSkinColors();
+      }
+      
+      // Refresh the list
+      this.populateSkinList();
+    } else {
+      // Try to purchase (in a real app, this would involve server/payment)
+      const result = skinManager.purchaseSkin(skinId);
+      if (result.success) {
+        // Auto-select after purchase
+        skinManager.selectSkin(skinId);
+        skinManager.clearTextureCache();
+        
+        if (this.renderer) {
+          this.renderer.updateSkinColors();
+        }
+        
+        this.populateSkinList();
+      } else {
+        alert(`Cannot purchase skin: ${result.error}`);
+      }
+    }
   }
 
   showGridSizeSelector(mode) {

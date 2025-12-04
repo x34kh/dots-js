@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { skinManager } from './skins.js';
 
 export class GameRenderer {
   constructor(canvas, boardLogic) {
@@ -22,16 +23,21 @@ export class GameRenderer {
     this.dotAnimations = new Map(); // key: "x,y", value: { targetScale, targetEmissive, currentScale, currentEmissive }
     this.animationSpeed = 0.15; // Smooth transition speed
     
-    this.playerColors = {
-      1: new THREE.Color(0x00ffff), // Cyan
-      2: new THREE.Color(0xff00ff)  // Magenta
-    };
+    // Use skin manager for player colors
+    this.playerColors = skinManager.getPlayerColors();
     
     this.defaultDotColor = new THREE.Color(0x4a4a6a);
     this.defaultEmissive = new THREE.Color(0x2a2a3a);
     this.capturedColor = new THREE.Color(0x1a1a2a);
     
     this.init();
+  }
+
+  /**
+   * Update colors from the current skin
+   */
+  updateSkinColors() {
+    this.playerColors = skinManager.getPlayerColors();
   }
 
   init() {
@@ -301,6 +307,7 @@ export class GameRenderer {
   /**
    * Create a mesh showing the captured area
    * Creates a polygon connecting the boundary dots and fills the enclosed space
+   * Supports pattern textures based on the current skin
    */
   createCapturedAreaMesh(capturedDots, playerNum) {
     const gridSize = this.boardLogic.gridSize;
@@ -360,16 +367,32 @@ export class GameRenderer {
     shape.lineTo(worldX(sortedBoundary[0].x), worldY(sortedBoundary[0].y));
     
     const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshBasicMaterial({
-      color: color,
-      transparent: true,
-      opacity: 0,
-      side: THREE.DoubleSide
-    });
+    
+    // Get pattern texture if available from current skin
+    const patternTexture = skinManager.getPatternTexture(playerNum);
+    
+    let material;
+    if (patternTexture) {
+      // Use textured material with pattern
+      material = new THREE.MeshBasicMaterial({
+        map: patternTexture,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide
+      });
+    } else {
+      // Use solid color material
+      material = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide
+      });
+    }
     
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.z = -0.15;
-    mesh.userData = { targetOpacity: 0.15, playerNum: playerNum };
+    mesh.userData = { targetOpacity: patternTexture ? 0.6 : 0.15, playerNum: playerNum };
     
     this.scene.add(mesh);
     this.capturedAreaMeshes.push(mesh);
