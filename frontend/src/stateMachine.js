@@ -19,6 +19,7 @@ export class StateMachine {
   constructor() {
     this.state = GameState.MENU;
     this.mode = null;
+    this.isLocalMode = false;
     this.players = {
       1: { id: null, name: 'Player 1', score: 0, color: 0x00ffff },
       2: { id: null, name: 'Player 2', score: 0, color: 0xff00ff }
@@ -70,11 +71,19 @@ export class StateMachine {
   }
 
   isLocalPlayerTurn() {
+    // In local mode, always allow the current player to make moves
+    if (this.isLocalMode) {
+      return true;
+    }
     return this.localPlayerId === this.currentPlayer;
   }
 
   switchTurn() {
     this.setCurrentPlayer(this.currentPlayer === 1 ? 2 : 1);
+    // In local mode, update localPlayerId to current player
+    if (this.isLocalMode) {
+      this.localPlayerId = this.currentPlayer;
+    }
   }
 
   reset() {

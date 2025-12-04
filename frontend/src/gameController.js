@@ -54,6 +54,10 @@ export class GameController {
 
   setupUIEvents() {
     // Menu buttons
+    document.getElementById('btn-local-mode').addEventListener('click', () => {
+      this.startLocalGame();
+    });
+
     document.getElementById('btn-demo-mode').addEventListener('click', () => {
       this.startDemoGame();
     });
@@ -132,6 +136,31 @@ export class GameController {
       this.joinDemoGame(offer);
       URLSignaling.clearParams();
     }
+  }
+
+  /**
+   * Start a local game for 2 players on the same device
+   */
+  startLocalGame() {
+    this.stateMachine.setMode(GameMode.DEMO);
+    this.stateMachine.isLocalMode = true;
+    
+    // Create guest users for both players
+    this.auth.createGuestUser();
+    
+    // Set up both players
+    this.stateMachine.localPlayerId = 1; // Both players play locally, start with player 1
+    this.stateMachine.setPlayer(1, {
+      id: 'local-player-1',
+      name: 'Player 1'
+    });
+    this.stateMachine.setPlayer(2, {
+      id: 'local-player-2',
+      name: 'Player 2'
+    });
+    
+    // Start the game immediately
+    this.startGame();
   }
 
   async startDemoGame() {
@@ -656,6 +685,7 @@ export class GameController {
     // Reset state
     this.boardLogic.reset();
     this.renderer.reset();
+    this.stateMachine.isLocalMode = false;
     this.stateMachine.setState(GameState.MENU);
     
     // Show menu
