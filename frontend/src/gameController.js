@@ -593,12 +593,13 @@ export class GameController {
     // Show forfeit button
     document.getElementById('btn-forfeit').classList.remove('hidden');
     
-    // Show player cards
-    this.updatePlayerCards();
-    
-    // Reset board
+    // Reset board and scores
     this.boardLogic.reset();
     this.renderer.reset();
+    this.stateMachine.reset();
+    
+    // Show player cards (after reset so scores are updated)
+    this.updatePlayerCards();
   }
 
   forfeitGame() {
@@ -822,7 +823,10 @@ export class GameController {
   }
 
   requestRematch() {
-    if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
+    if (this.stateMachine.mode === GameMode.LOCAL) {
+      // Local mode can rematch immediately
+      this.resetGame();
+    } else if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
       this.p2p.sendRematch();
       this.resetGame();
     } else if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
@@ -902,6 +906,10 @@ export class GameController {
     
     p1Card.querySelector('.player-name').textContent = this.stateMachine.players[1].name;
     p2Card.querySelector('.player-name').textContent = this.stateMachine.players[2].name;
+    
+    // Also update score displays to ensure they reflect current state
+    this.updateScoreDisplay(1, this.stateMachine.players[1].score);
+    this.updateScoreDisplay(2, this.stateMachine.players[2].score);
     
     this.updateTurnIndicator(this.stateMachine.currentPlayer);
   }
