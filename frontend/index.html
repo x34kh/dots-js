@@ -23,6 +23,7 @@
           <div class="player-score">0</div>
         </div>
       </div>
+      <button id="btn-forfeit" class="hidden">Forfeit</button>
       <div id="capture-notification" class="hidden">
         <span class="capture-text">Territory Captured!</span>
       </div>
@@ -42,6 +43,25 @@
           <input type="text" id="share-link" readonly>
           <button id="btn-copy-link">Copy</button>
         </div>
+        <div class="menu-divider"></div>
+        <button id="btn-skins">Skins</button>
+      </div>
+      <div id="skin-selector" class="hidden">
+        <h2>Select Skin</h2>
+        <div id="skin-list" class="skin-list">
+          <!-- Skin items will be dynamically added -->
+        </div>
+        <button id="btn-close-skins">Close</button>
+      </div>
+      <div id="grid-size-selector" class="hidden">
+        <h2>Select Grid Size</h2>
+        <div class="grid-size-options">
+          <button class="grid-size-btn" data-size="5">5 × 5</button>
+          <button class="grid-size-btn selected" data-size="10">10 × 10</button>
+          <button class="grid-size-btn" data-size="20">20 × 20</button>
+        </div>
+        <button id="btn-start-game">Start Game</button>
+        <button id="btn-back-to-menu">Back</button>
       </div>
       <div id="game-over" class="hidden">
         <h2>Game Over!</h2>

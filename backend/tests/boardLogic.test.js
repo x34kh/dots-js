@@ -103,19 +103,21 @@ describe('BoardLogic', () => {
       assert.strictEqual(cornerDot.captured, false);
     });
 
-    it('should not capture dots with opponent dots inside', () => {
+    it('should capture opponent dots when fully enclosed', () => {
       // Place opponent dot inside potential enclosure
       board.occupyDot(2, 2, 2); // opponent in center
       
-      // Try to enclose with player 1
+      // Enclose with player 1
       board.occupyDot(1, 2, 1);
       board.occupyDot(3, 2, 1);
       board.occupyDot(2, 1, 1);
       board.occupyDot(2, 3, 1);
       
-      // Adjacent unowned dots should not be captured because opponent breaks enclosure
-      const adjacentDot = board.getDot(1, 1);
-      assert.strictEqual(adjacentDot.captured, false);
+      // The opponent dot should be captured
+      const opponentDot = board.getDot(2, 2);
+      assert.strictEqual(opponentDot.captured, true, 'Opponent dot should be captured');
+      assert.strictEqual(opponentDot.capturedBy, 1, 'Opponent dot should be captured by player 1');
+      assert.strictEqual(opponentDot.owner, null, 'Opponent dot ownership should be removed');
     });
   });
 
@@ -253,5 +255,152 @@ describe('Territory Detection', () => {
     // Multiple dots should be captured
     const capturedCount = board.getCapturedDotsForPlayer(1).length;
     assert.ok(capturedCount >= 4);
+  });
+});
+
+describe('Capture Bug - Mixed dots inside enclosure', () => {
+  let board;
+
+  beforeEach(() => {
+    board = new BoardLogic(5);
+  });
+
+  it('should capture territory even when there are 2 dots (neutral + enemy) inside', () => {
+    // Player 1 creates an enclosure that contains both:
+    // - A neutral (unowned) dot
+    // - An enemy (player 2) dot
+    
+    // Create a larger enclosure around (2,2) area
+    // Place enemy dot first
+    board.occupyDot(2, 2, 2); // Enemy dot in the middle
+    
+    // Now player 1 surrounds this area
+    board.occupyDot(1, 1, 1);
+    board.occupyDot(2, 1, 1);
+    board.occupyDot(3, 1, 1);
+    board.occupyDot(1, 2, 1);
+    board.occupyDot(3, 2, 1);
+    board.occupyDot(1, 3, 1);
+    // This move completes the enclosure around (2,2)
+    const captureResult = board.occupyDot(2, 3, 1);
+    board.occupyDot(3, 3, 1);
+    
+    // The enemy dot should be captured when the enclosure is completed
+    const enemyDot = board.getDot(2, 2);
+    assert.strictEqual(enemyDot.captured, true, 'Enemy dot should be captured');
+    assert.strictEqual(enemyDot.capturedBy, 1, 'Enemy dot should be captured by player 1');
+    assert.strictEqual(enemyDot.owner, null, 'Enemy dot ownership should be removed');
+    
+    // Captured dots should be returned on the enclosure-completing move
+    assert.ok(captureResult.capturedDots.length > 0, 'Should have captured dots on the enclosure-completing move');
+  });
+
+  it('should capture territory with neutral dots but no enemy', () => {
+    // Player 1 creates an enclosure that contains only neutral dots
+    board.occupyDot(1, 1, 1);
+    board.occupyDot(2, 1, 1);
+    board.occupyDot(3, 1, 1);
+    board.occupyDot(1, 2, 1);
+    board.occupyDot(3, 2, 1);
+    board.occupyDot(1, 3, 1);
+    board.occupyDot(2, 3, 1);
+    const result = board.occupyDot(3, 3, 1);
+    
+    // Dot (2,2) should be captured
+    const centerDot = board.getDot(2, 2);
+    assert.strictEqual(centerDot.captured, true, 'Center dot should be captured');
+    assert.strictEqual(centerDot.capturedBy, 1, 'Center dot should be captured by player 1');
+  });
+});
+
+describe('Capture Bug Analysis - Adjacent neutral and enemy dots', () => {
+  let board;
+
+  beforeEach(() => {
+    board = new BoardLogic(7); // Use larger board for more complex scenarios
+  });
+
+  it('should capture both neutral and enemy dots when fully enclosed', () => {
+    // Create a scenario where:
+    // - Player 1 surrounds an area
+    // - The area contains neutral dots AND an enemy (player 2) dot
+    // - All dots inside the enclosure should be captured
+    
+    // Legend: 1=Player1, 2=Player2, .=empty, C=should be captured
+    // Layout (5x5 area in center of 7x7):
+    //   1 1 1 1 1
+    //   1 C C C 1
+    //   1 C 2 C 1   <- both neutral and enemy dots should be captured
+    //   1 C C C 1
+    //   1 1 1 1 1
+    
+    // Place enemy dot FIRST inside where the enclosure will be
+    board.occupyDot(3, 3, 2);
+    
+    // Create the enclosure boundary with player 1
+    // Top row
+    board.occupyDot(1, 1, 1);
+    board.occupyDot(2, 1, 1);
+    board.occupyDot(3, 1, 1);
+    board.occupyDot(4, 1, 1);
+    board.occupyDot(5, 1, 1);
+    
+    // Left column
+    board.occupyDot(1, 2, 1);
+    board.occupyDot(1, 3, 1);
+    board.occupyDot(1, 4, 1);
+    
+    // Right column
+    board.occupyDot(5, 2, 1);
+    board.occupyDot(5, 3, 1);
+    board.occupyDot(5, 4, 1);
+    
+    // Bottom row
+    board.occupyDot(1, 5, 1);
+    board.occupyDot(2, 5, 1);
+    board.occupyDot(3, 5, 1);
+    board.occupyDot(4, 5, 1);
+    board.occupyDot(5, 5, 1);
+    
+    // Neutral dots inside should be captured
+    const dot22 = board.getDot(2, 2);
+    const dot32 = board.getDot(3, 2);
+    const dot42 = board.getDot(4, 2);
+    
+    assert.strictEqual(dot22.captured, true, 'Dot (2,2) should be captured');
+    assert.strictEqual(dot22.capturedBy, 1, 'Dot (2,2) should be captured by player 1');
+    assert.strictEqual(dot32.captured, true, 'Dot (3,2) should be captured');
+    assert.strictEqual(dot42.captured, true, 'Dot (4,2) should be captured');
+    
+    // Enemy dot should also be captured (ownership removed)
+    const enemyDot = board.getDot(3, 3);
+    assert.strictEqual(enemyDot.captured, true, 'Enemy dot (3,3) should be captured');
+    assert.strictEqual(enemyDot.capturedBy, 1, 'Enemy dot (3,3) should be captured by player 1');
+    assert.strictEqual(enemyDot.owner, null, 'Enemy dot ownership should be removed');
+  });
+
+  it('should handle the case where neutral dots exist without border touch but enemy nearby', () => {
+    // A more specific scenario that might be the bug:
+    // If the flood fill starts from a neutral dot and finds an enemy,
+    // it might not properly mark the enclosure as invalid
+    
+    // Create small 5x5 enclosure without edge cases
+    // Inner 3x3 area at center of 5x5 board
+    board = new BoardLogic(5);
+    
+    // Create boundary - Player 1 dots around the outside
+    board.occupyDot(1, 1, 1);
+    board.occupyDot(2, 1, 1);
+    board.occupyDot(3, 1, 1);
+    board.occupyDot(1, 2, 1);
+    board.occupyDot(3, 2, 1);
+    board.occupyDot(1, 3, 1);
+    board.occupyDot(2, 3, 1);
+    board.occupyDot(3, 3, 1);
+    
+    // Center dot (2,2) is still neutral - this should be captured
+    const centerDot = board.getDot(2, 2);
+    assert.strictEqual(centerDot.captured, true, 'Center dot should be captured when enclosed by player 1');
+    assert.strictEqual(centerDot.capturedBy, 1, 'Center dot should be captured by player 1');
   });
 });

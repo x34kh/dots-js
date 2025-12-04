@@ -9,11 +9,12 @@ import { GameRenderer } from './renderer.js';
 import { P2PNetwork, URLSignaling } from './p2p.js';
 import { WebSocketClient } from './websocket.js';
 import { GoogleAuth } from './auth.js';
+import { skinManager, SKINS } from './skins.js';
 
 export class GameController {
   constructor(config = {}) {
     this.config = {
-      gridSize: config.gridSize || 5,
+      gridSize: config.gridSize || 10, // Default to 10x10
       googleClientId: config.googleClientId || null,
       serverUrl: config.serverUrl || null
     };
@@ -25,6 +26,8 @@ export class GameController {
     this.p2p = null;
     this.wsClient = null;
     this.auth = new GoogleAuth(this.config.googleClientId);
+    this.selectedGridSize = 10; // Default grid size
+    this.pendingGameMode = null; // Store the selected game mode before grid size selection
 
     this.init();
   }
@@ -37,6 +40,8 @@ export class GameController {
     this.setupUIEvents();
     this.setupInputEvents();
     this.setupStateMachineEvents();
+    this.setupGridSizeSelector();
+    this.setupSkinSelector();
 
     // Initialize auth (optional)
     try {
@@ -53,21 +58,21 @@ export class GameController {
   }
 
   setupUIEvents() {
-    // Menu buttons
+    // Menu buttons - now show grid size selector first
     document.getElementById('btn-local-mode').addEventListener('click', () => {
-      this.startLocalGame();
+      this.showGridSizeSelector('local');
     });
 
     document.getElementById('btn-demo-mode').addEventListener('click', () => {
-      this.startDemoGame();
+      this.showGridSizeSelector('demo');
     });
 
     document.getElementById('btn-online-mode').addEventListener('click', () => {
-      this.startOnlineGame();
+      this.showGridSizeSelector('online');
     });
 
     document.getElementById('btn-anonymous-mode').addEventListener('click', () => {
-      this.startAnonymousGame();
+      this.showGridSizeSelector('anonymous');
     });
 
     document.getElementById('btn-google-login').addEventListener('click', () => {
@@ -97,6 +102,184 @@ export class GameController {
     document.getElementById('btn-new-game').addEventListener('click', () => {
       this.returnToMenu();
     });
+
+    // Forfeit button
+    document.getElementById('btn-forfeit').addEventListener('click', () => {
+      this.forfeitGame();
+    });
+
+    // Skins button
+    document.getElementById('btn-skins').addEventListener('click', () => {
+      this.showSkinSelector();
+    });
+  }
+
+  setupGridSizeSelector() {
+    // Grid size button selection
+    const gridSizeBtns = document.querySelectorAll('.grid-size-btn');
+    gridSizeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Update selection
+        gridSizeBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.selectedGridSize = parseInt(btn.dataset.size, 10);
+      });
+    });
+
+    // Start game button
+    document.getElementById('btn-start-game').addEventListener('click', () => {
+      this.confirmGridSizeAndStartGame();
+    });
+
+    // Back button
+    document.getElementById('btn-back-to-menu').addEventListener('click', () => {
+      this.hideGridSizeSelector();
+    });
+  }
+
+  setupSkinSelector() {
+    // Close button
+    document.getElementById('btn-close-skins').addEventListener('click', () => {
+      this.hideSkinSelector();
+    });
+
+    // Populate skin list
+    this.populateSkinList();
+  }
+
+  showSkinSelector() {
+    document.getElementById('game-menu').classList.add('hidden');
+    document.getElementById('skin-selector').classList.remove('hidden');
+    this.populateSkinList();
+  }
+
+  hideSkinSelector() {
+    document.getElementById('skin-selector').classList.add('hidden');
+    document.getElementById('game-menu').classList.remove('hidden');
+  }
+
+  populateSkinList() {
+    const skinList = document.getElementById('skin-list');
+    skinList.innerHTML = '';
+
+    const skins = skinManager.getAllSkins();
+    const currentSkinId = skinManager.currentSkin;
+
+    for (const skin of skins) {
+      const isOwned = skinManager.isSkinOwned(skin.id);
+      const isSelected = skin.id === currentSkinId;
+
+      const skinItem = document.createElement('div');
+      skinItem.className = `skin-item${isSelected ? ' selected' : ''}${!isOwned ? ' locked' : ''}`;
+      skinItem.dataset.skinId = skin.id;
+
+      // Get colors from skin
+      const color1 = skin.player1.dotColor.toString(16).padStart(6, '0');
+      const color2 = skin.player2.dotColor.toString(16).padStart(6, '0');
+
+      skinItem.innerHTML = `
+        <div class="skin-preview">
+          <div class="skin-preview-dot" style="background-color: #${color1}"></div>
+          <div class="skin-preview-dot" style="background-color: #${color2}"></div>
+        </div>
+        <div class="skin-info">
+          <div class="skin-name">${skin.name}</div>
+          <div class="skin-description">${skin.description}</div>
+        </div>
+        <div class="skin-status ${isOwned ? 'owned' : 'price'}">
+          ${isOwned ? (isSelected ? '✓ Active' : 'Owned') : `${skin.price} coins`}
+        </div>
+      `;
+
+      skinItem.addEventListener('click', () => {
+        this.handleSkinClick(skin.id);
+      });
+
+      skinList.appendChild(skinItem);
+    }
+  }
+
+  handleSkinClick(skinId) {
+    if (skinManager.isSkinOwned(skinId)) {
+      // Select the skin
+      skinManager.selectSkin(skinId);
+      skinManager.clearTextureCache();
+      
+      // Update renderer colors
+      if (this.renderer) {
+        this.renderer.updateSkinColors();
+      }
+      
+      // Refresh the list
+      this.populateSkinList();
+    } else {
+      // Try to purchase (in a real app, this would involve server/payment)
+      const result = skinManager.purchaseSkin(skinId);
+      if (result.success) {
+        // Auto-select after purchase
+        skinManager.selectSkin(skinId);
+        skinManager.clearTextureCache();
+        
+        if (this.renderer) {
+          this.renderer.updateSkinColors();
+        }
+        
+        this.populateSkinList();
+      } else {
+        alert(`Cannot purchase skin: ${result.error}`);
+      }
+    }
+  }
+
+  showGridSizeSelector(mode) {
+    this.pendingGameMode = mode;
+    document.getElementById('game-menu').classList.add('hidden');
+    document.getElementById('grid-size-selector').classList.remove('hidden');
+  }
+
+  hideGridSizeSelector() {
+    this.pendingGameMode = null;
+    document.getElementById('grid-size-selector').classList.add('hidden');
+    document.getElementById('game-menu').classList.remove('hidden');
+  }
+
+  confirmGridSizeAndStartGame() {
+    // Update the grid size configuration
+    this.config.gridSize = this.selectedGridSize;
+    
+    // Reinitialize board logic and renderer with new grid size
+    this.boardLogic = new BoardLogic(this.selectedGridSize);
+    this.reinitializeRenderer();
+    
+    // Hide the grid size selector
+    document.getElementById('grid-size-selector').classList.add('hidden');
+    
+    // Start the appropriate game mode
+    switch (this.pendingGameMode) {
+      case 'local':
+        this.startLocalGame();
+        break;
+      case 'demo':
+        this.startDemoGame();
+        break;
+      case 'online':
+        this.startOnlineGame();
+        break;
+      case 'anonymous':
+        this.startAnonymousGame();
+        break;
+    }
+    
+    this.pendingGameMode = null;
+  }
+
+  reinitializeRenderer() {
+    // Clear the old scene and create a new renderer
+    if (this.renderer) {
+      // Dispose of old resources if needed
+      this.renderer.reset();
+    }
+    this.renderer = new GameRenderer(this.canvas, this.boardLogic);
   }
 
   setupInputEvents() {
@@ -407,12 +590,43 @@ export class GameController {
     document.getElementById('game-menu').classList.add('hidden');
     document.getElementById('share-link-container').classList.add('hidden');
     
+    // Show forfeit button
+    document.getElementById('btn-forfeit').classList.remove('hidden');
+    
     // Show player cards
     this.updatePlayerCards();
     
     // Reset board
     this.boardLogic.reset();
     this.renderer.reset();
+  }
+
+  forfeitGame() {
+    if (this.stateMachine.state !== GameState.PLAYING) return;
+    
+    // Confirm forfeit
+    if (!confirm('Are you sure you want to forfeit? Your opponent will win.')) {
+      return;
+    }
+    
+    // Determine winner (the other player)
+    const currentPlayerId = this.stateMachine.localPlayerId;
+    const winnerId = currentPlayerId === 1 ? 2 : 1;
+    
+    // Set the winner based on forfeit
+    this.stateMachine.players[winnerId].score = 999; // Ensure they win
+    
+    // Notify server/opponent if in online/p2p mode
+    if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
+      // P2P resign
+      this.p2p.send({ type: 'forfeit', player: currentPlayerId });
+    } else if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
+      // Server resign
+      this.wsClient.resign();
+    }
+    
+    // End the game
+    this.endGame({ forfeit: true, forfeiter: currentPlayerId });
   }
 
   handleMouseMove(event) {
@@ -580,12 +794,20 @@ export class GameController {
   endGame(data = null) {
     this.stateMachine.setState(GameState.GAME_OVER);
     
+    // Hide forfeit button
+    document.getElementById('btn-forfeit').classList.add('hidden');
+    
     const winner = this.stateMachine.getWinner();
     const p1Score = this.stateMachine.players[1].score;
     const p2Score = this.stateMachine.players[2].score;
     
     let winnerText;
-    if (winner === null) {
+    if (data && data.forfeit) {
+      const forfeiterName = this.stateMachine.players[data.forfeiter].name;
+      const winnerId = data.forfeiter === 1 ? 2 : 1;
+      const winnerName = this.stateMachine.players[winnerId].name;
+      winnerText = `${winnerName} wins! (${forfeiterName} forfeited)`;
+    } else if (winner === null) {
       winnerText = "It's a draw!";
     } else {
       const winnerName = this.stateMachine.players[winner].name;
@@ -616,6 +838,9 @@ export class GameController {
   resetGame() {
     document.getElementById('game-over').classList.add('hidden');
     
+    // Show forfeit button
+    document.getElementById('btn-forfeit').classList.remove('hidden');
+    
     this.boardLogic.reset();
     this.renderer.reset();
     this.stateMachine.reset();
@@ -641,6 +866,9 @@ export class GameController {
     this.renderer.reset();
     this.stateMachine.isLocalMode = false;
     this.stateMachine.setState(GameState.MENU);
+    
+    // Hide forfeit button
+    document.getElementById('btn-forfeit').classList.add('hidden');
     
     // Show menu
     document.getElementById('game-over').classList.add('hidden');
