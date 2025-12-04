@@ -21,7 +21,6 @@ export class GameRenderer {
     // Animation state for smooth hover transitions
     this.dotAnimations = new Map(); // key: "x,y", value: { targetScale, targetEmissive, currentScale, currentEmissive }
     this.animationSpeed = 0.15; // Smooth transition speed
-    this.territoryFillScale = 0.95; // Scale factor for territory fill squares
     
     this.playerColors = {
       1: new THREE.Color(0x00ffff), // Cyan
@@ -240,7 +239,7 @@ export class GameRenderer {
 
   /**
    * Create a mesh showing the captured area
-   * Includes both captured dots AND the boundary dots that form the perimeter
+   * Creates a polygon connecting the boundary dots and fills the enclosed space
    */
   createCapturedAreaMesh(capturedDots, playerNum) {
     const gridSize = this.boardLogic.gridSize;
@@ -248,58 +247,96 @@ export class GameRenderer {
     const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
     
-    // Collect all dots that should be included in the filled area:
-    // 1. The captured dots themselves
-    // 2. The boundary dots (owned by the player) that surround them
-    const allDotsInArea = new Set();
-    
-    // Add captured dots
+    // Find boundary dots (owned dots adjacent to captured dots)
+    const boundaryDots = new Set();
     for (const { x, y } of capturedDots) {
-      allDotsInArea.add(`${x},${y}`);
-    }
-    
-    // Find and add boundary dots (owned dots adjacent to captured dots)
-    for (const { x, y } of capturedDots) {
-      // Check all 8 neighbors (orthogonal and diagonal)
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
-            const dot = this.boardLogic.getDot(nx, ny);
-            if (dot && dot.owner === playerNum) {
-              allDotsInArea.add(`${nx},${ny}`);
-            }
+      // Check orthogonal neighbors (the ones that form the enclosure boundary)
+      const directions = [
+        { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
+        { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
+      ];
+      for (const { dx, dy } of directions) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+          const dot = this.boardLogic.getDot(nx, ny);
+          if (dot && dot.owner === playerNum) {
+            boundaryDots.add(`${nx},${ny}`);
           }
         }
       }
     }
     
-    // Create a fill mesh for each dot in the area
-    for (const key of allDotsInArea) {
+    // Convert boundary dots to array of positions
+    const boundaryPositions = Array.from(boundaryDots).map(key => {
       const [xStr, yStr] = key.split(',');
-      const x = parseInt(xStr);
-      const y = parseInt(yStr);
-      
-      const geometry = new THREE.PlaneGeometry(spacing * this.territoryFillScale, spacing * this.territoryFillScale);
-      const material = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: 0,
-        side: THREE.DoubleSide
-      });
-      
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(x * spacing - offset, y * spacing - offset, -0.15);
-      mesh.userData = { targetOpacity: 0.15 };
-      
-      this.scene.add(mesh);
-      this.capturedAreaMeshes.push(mesh);
-      
-      // Animate opacity
-      this.animateCapturedArea(mesh);
+      return { x: parseInt(xStr), y: parseInt(yStr) };
+    });
+    
+    // Sort boundary dots to form a proper polygon (angular sort around centroid)
+    const sortedBoundary = this.sortPointsForPolygon(boundaryPositions);
+    
+    // Need at least 3 points to form a polygon
+    if (sortedBoundary.length < 3) {
+      return;
     }
+    
+    // Create a polygon shape connecting the boundary dots
+    const shape = new THREE.Shape();
+    
+    // Convert grid coords to world coords
+    const worldX = (gx) => gx * spacing - offset;
+    const worldY = (gy) => gy * spacing - offset;
+    
+    // Move to first point
+    shape.moveTo(worldX(sortedBoundary[0].x), worldY(sortedBoundary[0].y));
+    
+    // Draw lines to remaining points
+    for (let i = 1; i < sortedBoundary.length; i++) {
+      shape.lineTo(worldX(sortedBoundary[i].x), worldY(sortedBoundary[i].y));
+    }
+    
+    // Close the shape
+    shape.lineTo(worldX(sortedBoundary[0].x), worldY(sortedBoundary[0].y));
+    
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide
+    });
+    
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.z = -0.15;
+    mesh.userData = { targetOpacity: 0.15 };
+    
+    this.scene.add(mesh);
+    this.capturedAreaMeshes.push(mesh);
+    
+    // Animate opacity
+    this.animateCapturedArea(mesh);
+  }
+
+  /**
+   * Sort points to form a proper polygon (counter-clockwise order)
+   * Uses angular sort around centroid
+   */
+  sortPointsForPolygon(points) {
+    if (points.length < 3) return points;
+    
+    // Calculate centroid
+    const centroid = {
+      x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+      y: points.reduce((sum, p) => sum + p.y, 0) / points.length
+    };
+    
+    // Sort by angle from centroid
+    return points.sort((a, b) => {
+      const angleA = Math.atan2(a.y - centroid.y, a.x - centroid.x);
+      const angleB = Math.atan2(b.y - centroid.y, b.x - centroid.x);
+      return angleA - angleB;
+    });
   }
 
   /**
