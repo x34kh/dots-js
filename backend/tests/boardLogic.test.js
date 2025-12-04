@@ -79,13 +79,17 @@ describe('BoardLogic', () => {
   });
 
   describe('territory capture (enclosure)', () => {
-    it('should capture enclosed dots when surrounded', () => {
-      // Create a 3x3 enclosure pattern
-      // Player 1 surrounds dot (2,2) with dots at cardinal directions
-      board.occupyDot(1, 2, 1); // left
-      board.occupyDot(3, 2, 1); // right  
+    it('should capture enclosed dots when surrounded by all 8 neighbors', () => {
+      // Create a complete 8-direction enclosure around dot (2,2)
+      // All 8 neighbors must be occupied for proper enclosure
+      board.occupyDot(1, 1, 1); // top-left
       board.occupyDot(2, 1, 1); // top
-      const result = board.occupyDot(2, 3, 1); // bottom - completes enclosure
+      board.occupyDot(3, 1, 1); // top-right
+      board.occupyDot(1, 2, 1); // left
+      board.occupyDot(3, 2, 1); // right
+      board.occupyDot(1, 3, 1); // bottom-left
+      board.occupyDot(2, 3, 1); // bottom
+      const result = board.occupyDot(3, 3, 1); // bottom-right - completes enclosure
       
       // The center dot (2,2) should now be captured
       const centerDot = board.getDot(2, 2);
@@ -93,10 +97,23 @@ describe('BoardLogic', () => {
       assert.strictEqual(centerDot.capturedBy, 1);
     });
 
+    it('should not capture with only orthogonal enclosure (diagonal escape possible)', () => {
+      // Create only orthogonal enclosure (cross pattern)
+      board.occupyDot(1, 2, 1); // left
+      board.occupyDot(3, 2, 1); // right  
+      board.occupyDot(2, 1, 1); // top
+      board.occupyDot(2, 3, 1); // bottom
+      
+      // The center dot (2,2) should NOT be captured since diagonal escape exists
+      const centerDot = board.getDot(2, 2);
+      assert.strictEqual(centerDot.captured, false);
+    });
+
     it('should not capture dots touching the border', () => {
       // Try to enclose corner area
       board.occupyDot(1, 0, 1); // top edge
       board.occupyDot(0, 1, 1); // left edge
+      board.occupyDot(1, 1, 1); // diagonal
       
       // Corner dot (0,0) touches the border, should not be captured
       const cornerDot = board.getDot(0, 0);
@@ -107,33 +124,43 @@ describe('BoardLogic', () => {
       // Place opponent dot inside potential enclosure
       board.occupyDot(2, 2, 2); // opponent in center
       
-      // Try to enclose with player 1
+      // Try to fully enclose with player 1 (all 8 directions)
+      board.occupyDot(1, 1, 1);
+      board.occupyDot(2, 1, 1);
+      board.occupyDot(3, 1, 1);
       board.occupyDot(1, 2, 1);
       board.occupyDot(3, 2, 1);
-      board.occupyDot(2, 1, 1);
+      board.occupyDot(1, 3, 1);
       board.occupyDot(2, 3, 1);
+      board.occupyDot(3, 3, 1);
       
-      // Adjacent unowned dots should not be captured because opponent breaks enclosure
-      const adjacentDot = board.getDot(1, 1);
-      assert.strictEqual(adjacentDot.captured, false);
+      // The enclosure is broken because opponent owns the center
+      // No unowned dots should be captured in this area
+      const capturedDots = board.getCapturedDotsForPlayer(1);
+      assert.strictEqual(capturedDots.length, 0);
     });
   });
 
   describe('preview capture', () => {
-    it('should preview captured dots correctly', () => {
-      // Set up almost-enclosure
+    it('should preview captured dots correctly with 8-direction enclosure', () => {
+      // Set up almost-complete 8-direction enclosure around (2,2)
+      board.occupyDot(1, 1, 1);
+      board.occupyDot(2, 1, 1);
+      board.occupyDot(3, 1, 1);
       board.occupyDot(1, 2, 1);
       board.occupyDot(3, 2, 1);
-      board.occupyDot(2, 1, 1);
+      board.occupyDot(1, 3, 1);
+      board.occupyDot(2, 3, 1);
+      // (3,3) is missing - to be previewed
       
       // Preview what happens if we complete the enclosure
-      const preview = board.previewCapture(2, 3, 1);
+      const preview = board.previewCapture(3, 3, 1);
       
       // Should preview capture of (2,2)
       assert.ok(preview.length > 0);
       
       // The dot should still be unoccupied after preview
-      assert.strictEqual(board.getDot(2, 3).owner, null);
+      assert.strictEqual(board.getDot(3, 3).owner, null);
     });
 
     it('should return empty array for invalid move', () => {
@@ -253,5 +280,49 @@ describe('Territory Detection', () => {
     // Multiple dots should be captured
     const capturedCount = board.getCapturedDotsForPlayer(1).length;
     assert.ok(capturedCount >= 4);
+  });
+
+  it('should correctly handle diamond-shaped enclosure', () => {
+    // Create a diamond enclosure around (2,2)
+    //     X
+    //   X . X
+    //     X
+    // With 8-direction flood fill, this is NOT a valid enclosure
+    // because diagonals are not blocked
+    board.occupyDot(2, 1, 1); // top
+    board.occupyDot(1, 2, 1); // left
+    board.occupyDot(3, 2, 1); // right
+    board.occupyDot(2, 3, 1); // bottom
+    
+    const centerDot = board.getDot(2, 2);
+    assert.strictEqual(centerDot.captured, false, 'Diamond enclosure should not capture with 8-direction check');
+  });
+
+  it('should recapture previously captured dots when expanded by same player', () => {
+    // First create a small enclosure around (2,2)
+    board.occupyDot(1, 1, 1);
+    board.occupyDot(2, 1, 1);
+    board.occupyDot(3, 1, 1);
+    board.occupyDot(1, 2, 1);
+    board.occupyDot(3, 2, 1);
+    board.occupyDot(1, 3, 1);
+    board.occupyDot(2, 3, 1);
+    board.occupyDot(3, 3, 1);
+    
+    // Center should be captured
+    let centerDot = board.getDot(2, 2);
+    assert.strictEqual(centerDot.captured, true);
+    assert.strictEqual(centerDot.capturedBy, 1);
+    
+    // Now expand the enclosure to include a corner dot
+    // Place a new dot that extends the territory
+    board.occupyDot(4, 1, 1);
+    board.occupyDot(4, 2, 1);
+    board.occupyDot(4, 3, 1);
+    
+    // The captured dot should still be captured by player 1
+    centerDot = board.getDot(2, 2);
+    assert.strictEqual(centerDot.captured, true);
+    assert.strictEqual(centerDot.capturedBy, 1);
   });
 });
