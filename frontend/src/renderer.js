@@ -200,7 +200,68 @@ export class GameRenderer {
         mesh.userData.ring.material.color.copy(color);
         mesh.userData.ring.material.opacity = 0.6;
       }
+      
+      // Check if this new dot is adjacent to any captured territory by this player
+      // If so, update the territory fill to include the new boundary
+      if (this.isDotAdjacentToCapturedTerritory(x, y, playerNum)) {
+        this.updateCapturedAreaFills(playerNum);
+      }
     }
+  }
+
+  /**
+   * Check if a dot position is adjacent to captured territory for a player
+   */
+  isDotAdjacentToCapturedTerritory(x, y, playerNum) {
+    const gridSize = this.boardLogic.gridSize;
+    
+    // Check all 8 neighbors
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+          const dot = this.boardLogic.getDot(nx, ny);
+          if (dot && dot.captured && dot.capturedBy === playerNum) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Remove captured area meshes for a specific player
+   */
+  removeCapturedAreaMeshesForPlayer(playerNum) {
+    for (let i = this.capturedAreaMeshes.length - 1; i >= 0; i--) {
+      const mesh = this.capturedAreaMeshes[i];
+      if (mesh.userData && mesh.userData.playerNum === playerNum) {
+        this.scene.remove(mesh);
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) mesh.material.dispose();
+        this.capturedAreaMeshes.splice(i, 1);
+      }
+    }
+  }
+
+  /**
+   * Update all captured area fills for a player
+   * Called when a new boundary dot is added that extends the territory
+   */
+  updateCapturedAreaFills(playerNum) {
+    // Get all captured dots for this player
+    const capturedDots = this.boardLogic.getCapturedDotsForPlayer(playerNum);
+    
+    if (capturedDots.length === 0) return;
+    
+    // Remove existing captured area meshes for this player
+    this.removeCapturedAreaMeshesForPlayer(playerNum);
+    
+    // Create new captured area mesh with updated boundary
+    this.createCapturedAreaMesh(capturedDots, playerNum);
   }
 
   /**
@@ -247,21 +308,20 @@ export class GameRenderer {
     const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
     
-    // Find boundary dots (owned dots adjacent to captured dots)
+    // Find boundary dots (owned dots adjacent to captured dots - including diagonals)
     const boundaryDots = new Set();
     for (const { x, y } of capturedDots) {
-      // Check orthogonal neighbors (the ones that form the enclosure boundary)
-      const directions = [
-        { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
-        { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
-      ];
-      for (const { dx, dy } of directions) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
-          const dot = this.boardLogic.getDot(nx, ny);
-          if (dot && dot.owner === playerNum) {
-            boundaryDots.add(`${nx},${ny}`);
+      // Check all 8 neighbors (orthogonal and diagonal)
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+            const dot = this.boardLogic.getDot(nx, ny);
+            if (dot && dot.owner === playerNum) {
+              boundaryDots.add(`${nx},${ny}`);
+            }
           }
         }
       }
@@ -309,7 +369,7 @@ export class GameRenderer {
     
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.z = -0.15;
-    mesh.userData = { targetOpacity: 0.15 };
+    mesh.userData = { targetOpacity: 0.15, playerNum: playerNum };
     
     this.scene.add(mesh);
     this.capturedAreaMeshes.push(mesh);
