@@ -52,6 +52,13 @@ export class BoardLogic {
   }
 
   /**
+   * Check if position is on the border of the grid
+   */
+  isBorderPosition(x, y) {
+    return x === 0 || x === this.gridSize - 1 || y === 0 || y === this.gridSize - 1;
+  }
+
+  /**
    * Occupy a dot and calculate captured territories
    */
   occupyDot(x, y, playerNum) {
@@ -183,7 +190,7 @@ export class BoardLogic {
       }
 
       // Check if we're at the border of the grid
-      if (x === 0 || x === this.gridSize - 1 || y === 0 || y === this.gridSize - 1) {
+      if (this.isBorderPosition(x, y)) {
         touchesBorder = true;
       }
 

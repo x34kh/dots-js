@@ -489,7 +489,7 @@ export class GameController {
     if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
       this.p2p.sendMove({ x, y, playerNum });
     } else if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
-      this.wsClient.submitMove(x, y, 0, 0); // Modified for new format
+      this.wsClient.submitMove(x, y); // Send dot coordinates for new game format
     }
     
     // Handle scoring

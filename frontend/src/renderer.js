@@ -120,8 +120,7 @@ export class GameRenderer {
           currentScale: 1,
           targetEmissiveIntensity: 0.5,
           currentEmissiveIntensity: 0.5,
-          targetColor: this.defaultDotColor.clone(),
-          currentColor: this.defaultDotColor.clone()
+          targetColor: this.defaultDotColor.clone()
         });
       }
     }
@@ -275,7 +274,7 @@ export class GameRenderer {
   animateCapturedArea(mesh) {
     const animate = () => {
       if (mesh.material.opacity < mesh.userData.targetOpacity) {
-        mesh.material.opacity += 0.01;
+        mesh.material.opacity += 0.02; // Faster increment for smoother animation
         requestAnimationFrame(animate);
       }
     };
@@ -515,7 +514,6 @@ export class GameRenderer {
         anim.targetEmissiveIntensity = 0.5;
         anim.currentEmissiveIntensity = 0.5;
         anim.targetColor = this.defaultDotColor.clone();
-        anim.currentColor = this.defaultDotColor.clone();
       }
       
       mesh.scale.setScalar(1.0);
