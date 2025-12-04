@@ -538,7 +538,7 @@ export class GameRenderer {
    */
   createCapturedAreaMesh(capturedDots, playerNum) {
     const gridSize = this.boardLogic.gridSize;
-    const spacing = 1.5;
+    const spacing = GameRenderer.DOT_SPACING;
     const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
     
@@ -733,7 +733,7 @@ export class GameRenderer {
    */
   createCaptureParticlesForDots(capturedDots, playerNum) {
     const gridSize = this.boardLogic.gridSize;
-    const spacing = 1.5;
+    const spacing = GameRenderer.DOT_SPACING;
     const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
 
@@ -778,7 +778,7 @@ export class GameRenderer {
     this.clearPreviews();
     
     const gridSize = this.boardLogic.gridSize;
-    const spacing = 1.5;
+    const spacing = GameRenderer.DOT_SPACING;
     const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
     
