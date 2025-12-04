@@ -200,7 +200,68 @@ export class GameRenderer {
         mesh.userData.ring.material.color.copy(color);
         mesh.userData.ring.material.opacity = 0.6;
       }
+      
+      // Check if this new dot is adjacent to any captured territory by this player
+      // If so, update the territory fill to include the new boundary
+      if (this.isDotAdjacentToCapturedTerritory(x, y, playerNum)) {
+        this.updateCapturedAreaFills(playerNum);
+      }
     }
+  }
+
+  /**
+   * Check if a dot position is adjacent to captured territory for a player
+   */
+  isDotAdjacentToCapturedTerritory(x, y, playerNum) {
+    const gridSize = this.boardLogic.gridSize;
+    
+    // Check all 8 neighbors
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+          const dot = this.boardLogic.getDot(nx, ny);
+          if (dot && dot.captured && dot.capturedBy === playerNum) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Remove captured area meshes for a specific player
+   */
+  removeCapturedAreaMeshesForPlayer(playerNum) {
+    for (let i = this.capturedAreaMeshes.length - 1; i >= 0; i--) {
+      const mesh = this.capturedAreaMeshes[i];
+      if (mesh.userData && mesh.userData.playerNum === playerNum) {
+        this.scene.remove(mesh);
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) mesh.material.dispose();
+        this.capturedAreaMeshes.splice(i, 1);
+      }
+    }
+  }
+
+  /**
+   * Update all captured area fills for a player
+   * Called when a new boundary dot is added that extends the territory
+   */
+  updateCapturedAreaFills(playerNum) {
+    // Get all captured dots for this player
+    const capturedDots = this.boardLogic.getCapturedDotsForPlayer(playerNum);
+    
+    if (capturedDots.length === 0) return;
+    
+    // Remove existing captured area meshes for this player
+    this.removeCapturedAreaMeshesForPlayer(playerNum);
+    
+    // Create new captured area mesh with updated boundary
+    this.createCapturedAreaMesh(capturedDots, playerNum);
   }
 
   /**
@@ -239,6 +300,7 @@ export class GameRenderer {
 
   /**
    * Create a mesh showing the captured area
+   * Creates a polygon connecting the boundary dots and fills the enclosed space
    */
   createCapturedAreaMesh(capturedDots, playerNum) {
     const gridSize = this.boardLogic.gridSize;
@@ -246,26 +308,95 @@ export class GameRenderer {
     const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
     
-    // Create a simple visual for each captured dot
+    // Find boundary dots (owned dots adjacent to captured dots - including diagonals)
+    const boundaryDots = new Set();
     for (const { x, y } of capturedDots) {
-      const geometry = new THREE.PlaneGeometry(spacing * 0.8, spacing * 0.8);
-      const material = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: 0,
-        side: THREE.DoubleSide
-      });
-      
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(x * spacing - offset, y * spacing - offset, -0.15);
-      mesh.userData = { targetOpacity: 0.15 };
-      
-      this.scene.add(mesh);
-      this.capturedAreaMeshes.push(mesh);
-      
-      // Animate opacity
-      this.animateCapturedArea(mesh);
+      // Check all 8 neighbors (orthogonal and diagonal)
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+            const dot = this.boardLogic.getDot(nx, ny);
+            if (dot && dot.owner === playerNum) {
+              boundaryDots.add(`${nx},${ny}`);
+            }
+          }
+        }
+      }
     }
+    
+    // Convert boundary dots to array of positions
+    const boundaryPositions = Array.from(boundaryDots).map(key => {
+      const [xStr, yStr] = key.split(',');
+      return { x: parseInt(xStr), y: parseInt(yStr) };
+    });
+    
+    // Sort boundary dots to form a proper polygon (angular sort around centroid)
+    const sortedBoundary = this.sortPointsForPolygon(boundaryPositions);
+    
+    // Need at least 3 points to form a polygon
+    if (sortedBoundary.length < 3) {
+      return;
+    }
+    
+    // Create a polygon shape connecting the boundary dots
+    const shape = new THREE.Shape();
+    
+    // Convert grid coords to world coords
+    const worldX = (gx) => gx * spacing - offset;
+    const worldY = (gy) => gy * spacing - offset;
+    
+    // Move to first point
+    shape.moveTo(worldX(sortedBoundary[0].x), worldY(sortedBoundary[0].y));
+    
+    // Draw lines to remaining points
+    for (let i = 1; i < sortedBoundary.length; i++) {
+      shape.lineTo(worldX(sortedBoundary[i].x), worldY(sortedBoundary[i].y));
+    }
+    
+    // Close the shape
+    shape.lineTo(worldX(sortedBoundary[0].x), worldY(sortedBoundary[0].y));
+    
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide
+    });
+    
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.z = -0.15;
+    mesh.userData = { targetOpacity: 0.15, playerNum: playerNum };
+    
+    this.scene.add(mesh);
+    this.capturedAreaMeshes.push(mesh);
+    
+    // Animate opacity
+    this.animateCapturedArea(mesh);
+  }
+
+  /**
+   * Sort points to form a proper polygon (counter-clockwise order)
+   * Uses angular sort around centroid
+   */
+  sortPointsForPolygon(points) {
+    if (points.length < 3) return points;
+    
+    // Calculate centroid
+    const centroid = {
+      x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+      y: points.reduce((sum, p) => sum + p.y, 0) / points.length
+    };
+    
+    // Sort by angle from centroid
+    return points.sort((a, b) => {
+      const angleA = Math.atan2(a.y - centroid.y, a.x - centroid.x);
+      const angleB = Math.atan2(b.y - centroid.y, b.x - centroid.x);
+      return angleA - angleB;
+    });
   }
 
   /**
