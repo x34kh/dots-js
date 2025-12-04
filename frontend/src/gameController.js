@@ -421,43 +421,35 @@ export class GameController {
     
     this.renderer.getMousePosition(event);
     const dot = this.renderer.getDotAtMouse();
+    const playerNum = this.stateMachine.currentPlayer;
     
-    // Clear previous hover
+    // Clear previous hover state
     if (this.renderer.hoverDot && this.renderer.hoverDot !== dot) {
-      if (this.renderer.hoverDot !== this.renderer.selectedDot) {
-        this.renderer.unhighlightDot(this.renderer.hoverDot);
-      }
+      const prevData = this.renderer.hoverDot.userData;
+      this.renderer.setDotHoverTarget(prevData.gridX, prevData.gridY, false);
       this.renderer.clearPreviews();
     }
     
-    if (dot && dot !== this.renderer.selectedDot) {
-      const playerNum = this.stateMachine.currentPlayer;
+    if (dot && this.renderer.isDotMeshClickable(dot)) {
+      const { gridX, gridY } = dot.userData;
       
-      // If we have a selected dot, show preview line and territory
-      if (this.renderer.selectedDot) {
-        const sel = this.renderer.selectedDot.userData;
-        const hov = dot.userData;
-        
-        if (this.boardLogic.isValidLine(sel.gridX, sel.gridY, hov.gridX, hov.gridY)) {
-          this.renderer.highlightDot(dot, this.renderer.playerColors[playerNum].getHex());
-          this.renderer.createPreviewLine(sel.gridX, sel.gridY, hov.gridX, hov.gridY, playerNum);
-          
-          // Preview territory capture
-          const previewTerritories = this.boardLogic.previewCapture(
-            sel.gridX, sel.gridY, hov.gridX, hov.gridY
-          );
-          previewTerritories.forEach(t => {
-            this.renderer.createPreviewTerritory(t.points);
-          });
-        }
-      } else {
-        // Just highlight the hovered dot
-        this.renderer.highlightDot(dot, this.renderer.playerColors[playerNum].getHex());
+      // Set hover animation target
+      this.renderer.setDotHoverTarget(gridX, gridY, true, playerNum);
+      
+      // Preview territory capture
+      const previewDots = this.boardLogic.previewCapture(gridX, gridY, playerNum);
+      if (previewDots.length > 0) {
+        this.renderer.showCapturePreview(previewDots, playerNum);
       }
       
       this.renderer.hoverDot = dot;
-    } else if (!dot) {
+    } else {
+      if (this.renderer.hoverDot) {
+        const prevData = this.renderer.hoverDot.userData;
+        this.renderer.setDotHoverTarget(prevData.gridX, prevData.gridY, false);
+      }
       this.renderer.hoverDot = null;
+      this.renderer.clearPreviews();
     }
   }
 
@@ -468,73 +460,49 @@ export class GameController {
     this.renderer.getMousePosition(event);
     const dot = this.renderer.getDotAtMouse();
     
-    if (!dot) {
-      this.cancelSelection();
+    if (!dot || !this.renderer.isDotMeshClickable(dot)) {
       return;
     }
     
-    const playerNum = this.stateMachine.currentPlayer;
-    
-    if (!this.renderer.selectedDot) {
-      // Select first dot
-      this.renderer.selectDot(dot, playerNum);
-    } else if (dot === this.renderer.selectedDot) {
-      // Deselect
-      this.cancelSelection();
-    } else {
-      // Try to place line
-      const sel = this.renderer.selectedDot.userData;
-      const target = dot.userData;
-      
-      if (this.boardLogic.isValidLine(sel.gridX, sel.gridY, target.gridX, target.gridY)) {
-        this.makeMove(sel.gridX, sel.gridY, target.gridX, target.gridY);
-      } else {
-        // Invalid line - select new dot instead
-        this.renderer.deselectDot();
-        this.renderer.selectDot(dot, playerNum);
-      }
-    }
+    const { gridX, gridY } = dot.userData;
+    this.makeMove(gridX, gridY);
   }
 
-  cancelSelection() {
-    this.renderer.deselectDot();
-    this.renderer.clearPreviews();
-  }
-
-  makeMove(x1, y1, x2, y2) {
+  makeMove(x, y) {
     const playerNum = this.stateMachine.currentPlayer;
     
-    // Place the line locally
-    const result = this.boardLogic.placeLine(x1, y1, x2, y2, playerNum);
+    // Occupy the dot
+    const result = this.boardLogic.occupyDot(x, y, playerNum);
     
     if (!result.success) {
       console.error('Invalid move');
       return;
     }
     
-    // Clear selection and previews
-    this.cancelSelection();
+    // Clear previews
+    this.renderer.clearPreviews();
     
     // Apply visual changes
-    this.applyMove({ x1, y1, x2, y2 }, playerNum, result.capturedTerritories);
+    this.applyMove({ x, y }, playerNum, result.capturedDots);
     
     // Send move to opponent/server
     if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
-      this.p2p.sendMove({ x1, y1, x2, y2, playerNum });
+      this.p2p.sendMove({ x, y, playerNum });
     } else if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
-      this.wsClient.submitMove(x1, y1, x2, y2);
+      this.wsClient.submitMove(x, y); // Send dot coordinates for new game format
     }
     
-    // Handle turn/captures
-    if (result.capturedTerritories.length > 0) {
-      // Player captured territory - they continue
-      const points = result.capturedTerritories.reduce((sum, t) => sum + t.area, 0);
-      this.stateMachine.addScore(playerNum, points);
+    // Handle scoring
+    // Score = 1 for the occupied dot + number of captured dots
+    const points = 1 + result.capturedDots.length;
+    this.stateMachine.addScore(playerNum, points);
+    
+    if (result.capturedDots.length > 0) {
       this.showCaptureNotification();
-    } else {
-      // No capture - switch turns
-      this.stateMachine.switchTurn();
     }
+    
+    // Switch turns (in this version, capturing doesn't give extra turn)
+    this.stateMachine.switchTurn();
     
     // Check game over
     if (this.boardLogic.isGameOver()) {
@@ -542,37 +510,32 @@ export class GameController {
     }
   }
 
-  applyMove(move, playerNum, captures = []) {
-    // Add line to renderer
-    const lineKey = this.boardLogic.getLineKey(move.x1, move.y1, move.x2, move.y2);
-    const lineMesh = this.renderer.createLine(move.x1, move.y1, move.x2, move.y2, playerNum);
-    this.renderer.lineMeshes.set(lineKey, lineMesh);
+  applyMove(move, playerNum, capturedDots = []) {
+    // Mark the dot as owned
+    this.renderer.setDotOwner(move.x, move.y, playerNum);
     
-    // Add territories
-    captures.forEach(territory => {
-      const territoryKey = territory.points.map(p => `${p.x},${p.y}`).join('|');
-      const territoryMesh = this.renderer.createTerritory(territory.points, playerNum);
-      this.renderer.territoryMeshes.set(territoryKey, territoryMesh);
-    });
+    // Mark captured dots
+    if (capturedDots.length > 0) {
+      this.renderer.setCapturedDots(capturedDots, playerNum);
+    }
   }
 
   receiveMove(data) {
-    const { x1, y1, x2, y2, playerNum } = data;
+    const { x, y, playerNum } = data;
     
     // Apply move to board logic
-    const result = this.boardLogic.placeLine(x1, y1, x2, y2, playerNum);
+    const result = this.boardLogic.occupyDot(x, y, playerNum);
     
     if (result.success) {
       // Apply visual changes
-      this.applyMove({ x1, y1, x2, y2 }, playerNum, result.capturedTerritories);
+      this.applyMove({ x, y }, playerNum, result.capturedDots);
       
-      // Handle scoring and turns
-      if (result.capturedTerritories.length > 0) {
-        const points = result.capturedTerritories.reduce((sum, t) => sum + t.area, 0);
-        this.stateMachine.addScore(playerNum, points);
-      } else {
-        this.stateMachine.switchTurn();
-      }
+      // Handle scoring
+      const points = 1 + result.capturedDots.length;
+      this.stateMachine.addScore(playerNum, points);
+      
+      // Switch turns
+      this.stateMachine.switchTurn();
       
       // Check game over
       if (this.boardLogic.isGameOver()) {
@@ -594,21 +557,15 @@ export class GameController {
   rebuildVisuals() {
     this.renderer.reset();
     
-    // Rebuild lines
-    this.boardLogic.lines.forEach((playerNum, key) => {
-      const [p1, p2] = key.split('-');
-      const [x1, y1] = p1.split(',').map(Number);
-      const [x2, y2] = p2.split(',').map(Number);
-      
-      const lineMesh = this.renderer.createLine(x1, y1, x2, y2, playerNum, false);
-      this.renderer.lineMeshes.set(key, lineMesh);
-    });
-    
-    // Rebuild territories
-    this.boardLogic.territories.forEach((data, key) => {
-      const territoryMesh = this.renderer.createTerritory(data.points, data.player, false);
-      this.renderer.territoryMeshes.set(key, territoryMesh);
-    });
+    // Rebuild dot states
+    for (const [, dot] of this.boardLogic.dots) {
+      if (dot.owner) {
+        this.renderer.setDotOwner(dot.x, dot.y, dot.owner);
+      }
+      if (dot.captured) {
+        this.renderer.setCapturedDots([{ x: dot.x, y: dot.y }], dot.capturedBy);
+      }
+    }
   }
 
   showCaptureNotification() {

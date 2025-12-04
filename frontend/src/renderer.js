@@ -12,19 +12,24 @@ export class GameRenderer {
   constructor(canvas, boardLogic) {
     this.canvas = canvas;
     this.boardLogic = boardLogic;
-    this.dotMeshes = [];
-    this.lineMeshes = new Map();
-    this.territoryMeshes = new Map();
+    this.dotMeshes = new Map(); // key: "x,y", value: mesh
+    this.capturedAreaMeshes = [];
     this.previewMeshes = [];
     this.hoverDot = null;
-    this.selectedDot = null;
     this.particles = [];
-    this.animatingLines = [];
+    
+    // Animation state for smooth hover transitions
+    this.dotAnimations = new Map(); // key: "x,y", value: { targetScale, targetEmissive, currentScale, currentEmissive }
+    this.animationSpeed = 0.15; // Smooth transition speed
     
     this.playerColors = {
       1: new THREE.Color(0x00ffff), // Cyan
       2: new THREE.Color(0xff00ff)  // Magenta
     };
+    
+    this.defaultDotColor = new THREE.Color(0x4a4a6a);
+    this.defaultEmissive = new THREE.Color(0x2a2a3a);
+    this.capturedColor = new THREE.Color(0x1a1a2a);
     
     this.init();
   }
@@ -97,7 +102,7 @@ export class GameRenderer {
     this.createGridBackground(gridSize, spacing, offset);
 
     // Create dots
-    this.dotMeshes = [];
+    this.dotMeshes.clear();
     for (let y = 0; y < gridSize; y++) {
       for (let x = 0; x < gridSize; x++) {
         const dot = this.createDot(
@@ -107,7 +112,16 @@ export class GameRenderer {
           y
         );
         this.scene.add(dot);
-        this.dotMeshes.push(dot);
+        this.dotMeshes.set(`${x},${y}`, dot);
+        
+        // Initialize animation state
+        this.dotAnimations.set(`${x},${y}`, {
+          targetScale: 1,
+          currentScale: 1,
+          targetEmissiveIntensity: 0.5,
+          currentEmissiveIntensity: 0.5,
+          targetColor: this.defaultDotColor.clone()
+        });
       }
     }
   }
@@ -166,177 +180,177 @@ export class GameRenderer {
     return mesh;
   }
 
-  createLine(x1, y1, x2, y2, playerNum, animated = true) {
+  /**
+   * Mark a dot as owned by a player with animation
+   */
+  setDotOwner(x, y, playerNum) {
+    const key = `${x},${y}`;
+    const mesh = this.dotMeshes.get(key);
+    const anim = this.dotAnimations.get(key);
+    
+    if (mesh && anim) {
+      const color = this.playerColors[playerNum];
+      anim.targetColor = color.clone();
+      anim.targetEmissiveIntensity = 0.8;
+      anim.targetScale = 1.2;
+      mesh.userData.owner = playerNum;
+      
+      // Update ring
+      if (mesh.userData.ring) {
+        mesh.userData.ring.material.color.copy(color);
+        mesh.userData.ring.material.opacity = 0.6;
+      }
+    }
+  }
+
+  /**
+   * Mark dots as captured (enclosed) by a player
+   */
+  setCapturedDots(capturedDots, playerNum) {
+    const color = this.playerColors[playerNum];
+    
+    for (const { x, y } of capturedDots) {
+      const key = `${x},${y}`;
+      const mesh = this.dotMeshes.get(key);
+      const anim = this.dotAnimations.get(key);
+      
+      if (mesh && anim) {
+        // Captured dots are dimmed and marked
+        anim.targetColor = this.capturedColor.clone();
+        anim.targetEmissiveIntensity = 0.2;
+        anim.targetScale = 0.7;
+        mesh.userData.captured = true;
+        mesh.userData.capturedBy = playerNum;
+        
+        // Update ring to show capture
+        if (mesh.userData.ring) {
+          mesh.userData.ring.material.color.copy(color);
+          mesh.userData.ring.material.opacity = 0.3;
+        }
+      }
+    }
+    
+    // Create capture area visualization
+    if (capturedDots.length > 0) {
+      this.createCapturedAreaMesh(capturedDots, playerNum);
+      this.createCaptureParticlesForDots(capturedDots, playerNum);
+    }
+  }
+
+  /**
+   * Create a mesh showing the captured area
+   */
+  createCapturedAreaMesh(capturedDots, playerNum) {
     const gridSize = this.boardLogic.gridSize;
     const spacing = 1.5;
     const offset = (gridSize - 1) * spacing / 2;
-
-    const start = new THREE.Vector3(
-      x1 * spacing - offset,
-      y1 * spacing - offset,
-      0.05
-    );
-    const end = new THREE.Vector3(
-      x2 * spacing - offset,
-      y2 * spacing - offset,
-      0.05
-    );
-
     const color = this.playerColors[playerNum];
     
-    // Create line geometry
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, start]);
-    const lineMaterial = new THREE.LineBasicMaterial({
-      color: color,
-      linewidth: 3
-    });
-    const line = new THREE.Line(lineGeometry, lineMaterial);
-
-    // Create thicker tube for better visibility
-    const direction = end.clone().sub(start);
-    const length = direction.length();
-    const tubeGeometry = new THREE.CylinderGeometry(0.04, 0.04, length, 8);
-    const tubeMaterial = new THREE.MeshStandardMaterial({
-      color: color,
-      emissive: color,
-      emissiveIntensity: 0.5,
-      metalness: 0.5,
-      roughness: 0.3
-    });
-    const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
-    
-    // Position and rotate tube
-    const midpoint = start.clone().add(end).multiplyScalar(0.5);
-    tube.position.copy(midpoint);
-    tube.rotation.z = Math.atan2(direction.y, direction.x) + Math.PI / 2;
-    tube.scale.y = animated ? 0 : 1;
-
-    const group = new THREE.Group();
-    group.add(line);
-    group.add(tube);
-    group.userData = { x1, y1, x2, y2, playerNum, tube };
-
-    this.scene.add(group);
-
-    if (animated) {
-      this.animatingLines.push({
-        tube,
-        targetScale: 1,
-        speed: 0.1
+    // Create a simple visual for each captured dot
+    for (const { x, y } of capturedDots) {
+      const geometry = new THREE.PlaneGeometry(spacing * 0.8, spacing * 0.8);
+      const material = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide
       });
+      
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(x * spacing - offset, y * spacing - offset, -0.15);
+      mesh.userData = { targetOpacity: 0.15 };
+      
+      this.scene.add(mesh);
+      this.capturedAreaMeshes.push(mesh);
+      
+      // Animate opacity
+      this.animateCapturedArea(mesh);
     }
-
-    return group;
   }
 
-  createTerritory(points, playerNum, animated = true) {
+  /**
+   * Animate captured area fade in
+   */
+  animateCapturedArea(mesh) {
+    const animate = () => {
+      if (mesh.material.opacity < mesh.userData.targetOpacity) {
+        mesh.material.opacity += 0.02; // Faster increment for smoother animation
+        requestAnimationFrame(animate);
+      }
+    };
+    animate();
+  }
+
+  /**
+   * Create particles for captured dots
+   */
+  createCaptureParticlesForDots(capturedDots, playerNum) {
     const gridSize = this.boardLogic.gridSize;
     const spacing = 1.5;
     const offset = (gridSize - 1) * spacing / 2;
+    const color = this.playerColors[playerNum];
 
+    for (const { x, y } of capturedDots) {
+      const worldX = x * spacing - offset;
+      const worldY = y * spacing - offset;
+      
+      // Create fewer particles per dot
+      const particleCount = 10;
+      for (let i = 0; i < particleCount; i++) {
+        const geometry = new THREE.SphereGeometry(0.02 + Math.random() * 0.02, 6, 6);
+        const material = new THREE.MeshBasicMaterial({
+          color: color,
+          transparent: true,
+          opacity: 1
+        });
+        
+        const particle = new THREE.Mesh(geometry, material);
+        particle.position.set(worldX, worldY, 0.1);
+        
+        const angle = (i / particleCount) * Math.PI * 2;
+        const speed = 0.3 + Math.random() * 0.3;
+        particle.userData = {
+          velocity: new THREE.Vector3(
+            Math.cos(angle) * speed,
+            Math.sin(angle) * speed,
+            Math.random() * 0.3
+          ),
+          life: 1
+        };
+        
+        this.scene.add(particle);
+        this.particles.push(particle);
+      }
+    }
+  }
+
+  /**
+   * Preview dots that would be captured
+   */
+  showCapturePreview(previewDots, playerNum) {
+    this.clearPreviews();
+    
+    const gridSize = this.boardLogic.gridSize;
+    const spacing = 1.5;
+    const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
     
-    // Convert points to 3D coordinates
-    const shape = new THREE.Shape();
-    const firstPoint = points[0];
-    shape.moveTo(firstPoint.x * spacing - offset, firstPoint.y * spacing - offset);
-    
-    for (let i = 1; i < points.length; i++) {
-      const point = points[i];
-      shape.lineTo(point.x * spacing - offset, point.y * spacing - offset);
+    for (const { x, y } of previewDots) {
+      // Create preview ring around dot
+      const ringGeometry = new THREE.RingGeometry(0.25, 0.35, 32);
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.4,
+        side: THREE.DoubleSide
+      });
+      
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.position.set(x * spacing - offset, y * spacing - offset, 0.02);
+      
+      this.scene.add(ring);
+      this.previewMeshes.push(ring);
     }
-    shape.closePath();
-
-    const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshStandardMaterial({
-      color: color,
-      emissive: color,
-      emissiveIntensity: 0.3,
-      transparent: true,
-      opacity: animated ? 0 : 0.4,
-      side: THREE.DoubleSide
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.z = -0.1;
-    mesh.userData = { playerNum, targetOpacity: 0.4 };
-
-    this.scene.add(mesh);
-
-    if (animated) {
-      this.animateTerritory(mesh);
-      this.createCaptureParticles(points, playerNum);
-    }
-
-    return mesh;
-  }
-
-  createPreviewTerritory(points) {
-    const gridSize = this.boardLogic.gridSize;
-    const spacing = 1.5;
-    const offset = (gridSize - 1) * spacing / 2;
-
-    const shape = new THREE.Shape();
-    const firstPoint = points[0];
-    shape.moveTo(firstPoint.x * spacing - offset, firstPoint.y * spacing - offset);
-    
-    for (let i = 1; i < points.length; i++) {
-      const point = points[i];
-      shape.lineTo(point.x * spacing - offset, point.y * spacing - offset);
-    }
-    shape.closePath();
-
-    const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.2,
-      side: THREE.DoubleSide
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.z = -0.05;
-
-    this.scene.add(mesh);
-    this.previewMeshes.push(mesh);
-
-    return mesh;
-  }
-
-  createPreviewLine(x1, y1, x2, y2, playerNum) {
-    const gridSize = this.boardLogic.gridSize;
-    const spacing = 1.5;
-    const offset = (gridSize - 1) * spacing / 2;
-
-    const start = new THREE.Vector3(
-      x1 * spacing - offset,
-      y1 * spacing - offset,
-      0.05
-    );
-    const end = new THREE.Vector3(
-      x2 * spacing - offset,
-      y2 * spacing - offset,
-      0.05
-    );
-
-    const color = this.playerColors[playerNum];
-    
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const lineMaterial = new THREE.LineDashedMaterial({
-      color: color,
-      dashSize: 0.1,
-      gapSize: 0.05,
-      transparent: true,
-      opacity: 0.6
-    });
-    
-    const line = new THREE.Line(lineGeometry, lineMaterial);
-    line.computeLineDistances();
-
-    this.scene.add(line);
-    this.previewMeshes.push(line);
-
-    return line;
   }
 
   clearPreviews() {
@@ -348,98 +362,62 @@ export class GameRenderer {
     this.previewMeshes = [];
   }
 
-  highlightDot(dot, color = 0x00ffff) {
-    if (dot) {
-      dot.material.color.setHex(color);
-      dot.material.emissive.setHex(color);
-      dot.material.emissiveIntensity = 1;
-      dot.scale.setScalar(1.3);
+  /**
+   * Set hover target for smooth animation
+   */
+  setDotHoverTarget(x, y, isHovered, playerNum = null) {
+    const key = `${x},${y}`;
+    const anim = this.dotAnimations.get(key);
+    const mesh = this.dotMeshes.get(key);
+    
+    if (!anim || !mesh) return;
+    
+    // Don't animate owned or captured dots on hover
+    if (mesh.userData.owner || mesh.userData.captured) return;
+    
+    if (isHovered && playerNum) {
+      const color = this.playerColors[playerNum];
+      anim.targetScale = 1.4;
+      anim.targetEmissiveIntensity = 1.0;
+      anim.targetColor = color.clone();
+    } else {
+      anim.targetScale = 1.0;
+      anim.targetEmissiveIntensity = 0.5;
+      anim.targetColor = this.defaultDotColor.clone();
+    }
+  }
+
+  /**
+   * Update all dot animations for smooth transitions
+   */
+  updateDotAnimations() {
+    for (const [key, anim] of this.dotAnimations) {
+      const mesh = this.dotMeshes.get(key);
+      if (!mesh) continue;
       
-      if (dot.userData.ring) {
-        dot.userData.ring.material.color.setHex(color);
-        dot.userData.ring.material.opacity = 0.8;
+      // Smooth scale transition
+      const scaleDiff = anim.targetScale - anim.currentScale;
+      if (Math.abs(scaleDiff) > 0.001) {
+        anim.currentScale += scaleDiff * this.animationSpeed;
+        mesh.scale.setScalar(anim.currentScale);
+      }
+      
+      // Smooth emissive intensity transition
+      const emissiveDiff = anim.targetEmissiveIntensity - anim.currentEmissiveIntensity;
+      if (Math.abs(emissiveDiff) > 0.001) {
+        anim.currentEmissiveIntensity += emissiveDiff * this.animationSpeed;
+        mesh.material.emissiveIntensity = anim.currentEmissiveIntensity;
+      }
+      
+      // Smooth color transition
+      mesh.material.color.lerp(anim.targetColor, this.animationSpeed);
+      mesh.material.emissive.lerp(anim.targetColor, this.animationSpeed);
+      
+      // Update ring if exists
+      if (mesh.userData.ring) {
+        mesh.userData.ring.material.color.lerp(anim.targetColor, this.animationSpeed);
       }
     }
-  }
-
-  unhighlightDot(dot) {
-    if (dot) {
-      dot.material.color.setHex(0x4a4a6a);
-      dot.material.emissive.setHex(0x2a2a3a);
-      dot.material.emissiveIntensity = 0.5;
-      dot.scale.setScalar(1);
-      
-      if (dot.userData.ring) {
-        dot.userData.ring.material.color.setHex(0x4a4a6a);
-        dot.userData.ring.material.opacity = 0.3;
-      }
-    }
-  }
-
-  selectDot(dot, playerNum) {
-    this.highlightDot(dot, this.playerColors[playerNum].getHex());
-    this.selectedDot = dot;
-  }
-
-  deselectDot() {
-    if (this.selectedDot) {
-      this.unhighlightDot(this.selectedDot);
-      this.selectedDot = null;
-    }
-  }
-
-  createCaptureParticles(points, playerNum) {
-    const gridSize = this.boardLogic.gridSize;
-    const spacing = 1.5;
-    const offset = (gridSize - 1) * spacing / 2;
-    const color = this.playerColors[playerNum];
-
-    // Calculate center of territory
-    let centerX = 0, centerY = 0;
-    points.forEach(p => {
-      centerX += p.x * spacing - offset;
-      centerY += p.y * spacing - offset;
-    });
-    centerX /= points.length;
-    centerY /= points.length;
-
-    // Create particles
-    const particleCount = 30;
-    for (let i = 0; i < particleCount; i++) {
-      const geometry = new THREE.SphereGeometry(0.03 + Math.random() * 0.03, 8, 8);
-      const material = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: 1
-      });
-      
-      const particle = new THREE.Mesh(geometry, material);
-      particle.position.set(centerX, centerY, 0.1);
-      
-      const angle = (i / particleCount) * Math.PI * 2;
-      const speed = 0.5 + Math.random() * 0.5;
-      particle.userData = {
-        velocity: new THREE.Vector3(
-          Math.cos(angle) * speed,
-          Math.sin(angle) * speed,
-          Math.random() * 0.5
-        ),
-        life: 1
-      };
-      
-      this.scene.add(particle);
-      this.particles.push(particle);
-    }
-  }
-
-  animateTerritory(mesh) {
-    const animate = () => {
-      if (mesh.material.opacity < mesh.userData.targetOpacity) {
-        mesh.material.opacity += 0.02;
-        requestAnimationFrame(animate);
-      }
-    };
-    animate();
   }
 
   updateParticles() {
@@ -460,19 +438,6 @@ export class GameRenderer {
     }
   }
 
-  updateAnimatingLines() {
-    for (let i = this.animatingLines.length - 1; i >= 0; i--) {
-      const anim = this.animatingLines[i];
-      
-      anim.tube.scale.y += (anim.targetScale - anim.tube.scale.y) * anim.speed;
-      
-      if (Math.abs(anim.tube.scale.y - anim.targetScale) < 0.01) {
-        anim.tube.scale.y = anim.targetScale;
-        this.animatingLines.splice(i, 1);
-      }
-    }
-  }
-
   getMousePosition(event) {
     const rect = this.canvas.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -481,12 +446,21 @@ export class GameRenderer {
 
   getDotAtMouse() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const intersects = this.raycaster.intersectObjects(this.dotMeshes);
+    const dotArray = Array.from(this.dotMeshes.values());
+    const intersects = this.raycaster.intersectObjects(dotArray);
     
     if (intersects.length > 0) {
       return intersects[0].object;
     }
     return null;
+  }
+
+  /**
+   * Check if a dot mesh is clickable
+   */
+  isDotMeshClickable(mesh) {
+    if (!mesh || !mesh.userData) return false;
+    return !mesh.userData.owner && !mesh.userData.captured;
   }
 
   handleResize() {
@@ -507,22 +481,18 @@ export class GameRenderer {
 
   render() {
     this.updateParticles();
-    this.updateAnimatingLines();
+    this.updateDotAnimations();
     this.composer.render();
   }
 
   reset() {
-    // Remove all lines
-    this.lineMeshes.forEach(mesh => {
+    // Remove captured area meshes
+    this.capturedAreaMeshes.forEach(mesh => {
       this.scene.remove(mesh);
+      if (mesh.geometry) mesh.geometry.dispose();
+      if (mesh.material) mesh.material.dispose();
     });
-    this.lineMeshes.clear();
-
-    // Remove all territories
-    this.territoryMeshes.forEach(mesh => {
-      this.scene.remove(mesh);
-    });
-    this.territoryMeshes.clear();
+    this.capturedAreaMeshes = [];
 
     // Clear previews
     this.clearPreviews();
@@ -531,9 +501,32 @@ export class GameRenderer {
     this.particles.forEach(p => this.scene.remove(p));
     this.particles = [];
 
-    // Reset dots
-    this.dotMeshes.forEach(dot => this.unhighlightDot(dot));
-    this.selectedDot = null;
+    // Reset all dots to default state
+    for (const [key, mesh] of this.dotMeshes) {
+      mesh.userData.owner = null;
+      mesh.userData.captured = false;
+      mesh.userData.capturedBy = null;
+      
+      const anim = this.dotAnimations.get(key);
+      if (anim) {
+        anim.targetScale = 1.0;
+        anim.currentScale = 1.0;
+        anim.targetEmissiveIntensity = 0.5;
+        anim.currentEmissiveIntensity = 0.5;
+        anim.targetColor = this.defaultDotColor.clone();
+      }
+      
+      mesh.scale.setScalar(1.0);
+      mesh.material.color.copy(this.defaultDotColor);
+      mesh.material.emissive.copy(this.defaultEmissive);
+      mesh.material.emissiveIntensity = 0.5;
+      
+      if (mesh.userData.ring) {
+        mesh.userData.ring.material.color.setHex(0x4a4a6a);
+        mesh.userData.ring.material.opacity = 0.3;
+      }
+    }
+    
     this.hoverDot = null;
   }
 }
