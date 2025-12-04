@@ -121,44 +121,45 @@ export class BoardLogic {
   /**
    * Calculate captured territories using flood-fill algorithm
    * An area is captured when it's completely surrounded by one player's dots
-   * Uses all 8 directions (including diagonals) for proper enclosure detection
+   * Also handles recapturing dots that were previously captured by another player
    */
   calculateCapturedTerritories(playerNum) {
     const allCapturedDots = [];
     const visited = new Set();
 
-    // For each unowned or previously captured dot, check if it's now enclosed by playerNum's dots
+    // For each unowned dot (or captured by another player), check if it's enclosed by playerNum's dots
     for (const [key, dot] of this.dots) {
-      // Skip if already visited or owned by this player
-      if (visited.has(key) || dot.owner === playerNum) continue;
+      // Skip dots owned by any player
+      if (dot.owner !== null) continue;
+      // Skip if already visited
+      if (visited.has(key)) continue;
+      // Skip dots already captured by this same player
+      if (dot.captured && dot.capturedBy === playerNum) continue;
       
-      // Check unowned dots (captured or not) for potential enclosure
-      if (dot.owner === null) {
-        const { enclosed, enclosedDots, touchesBorder } = this.floodFillCheck(
-          dot.x, dot.y, playerNum, visited
-        );
+      const { enclosed, enclosedDots, touchesBorder } = this.floodFillCheck(
+        dot.x, dot.y, playerNum, visited
+      );
 
-        if (enclosed && !touchesBorder && enclosedDots.length > 0) {
-          // Mark all these dots as captured (or recaptured)
-          for (const capturedDot of enclosedDots) {
-            const d = this.getDot(capturedDot.x, capturedDot.y);
-            if (d && d.owner === null) {
-              // Only count as newly captured if not already captured by this player
-              const wasAlreadyCapturedByThisPlayer = d.captured && d.capturedBy === playerNum;
-              d.captured = true;
-              d.capturedBy = playerNum;
-              if (!wasAlreadyCapturedByThisPlayer) {
-                allCapturedDots.push(capturedDot);
-              }
+      if (enclosed && !touchesBorder && enclosedDots.length > 0) {
+        // Mark all these dots as captured (or recaptured)
+        for (const capturedDot of enclosedDots) {
+          const d = this.getDot(capturedDot.x, capturedDot.y);
+          if (d && d.owner === null) {
+            const wasAlreadyCapturedByThisPlayer = d.captured && d.capturedBy === playerNum;
+            d.captured = true;
+            d.capturedBy = playerNum;
+            // Only add to result if not already captured by this player
+            if (!wasAlreadyCapturedByThisPlayer) {
+              allCapturedDots.push(capturedDot);
             }
           }
+        }
 
-          if (enclosedDots.length > 0) {
-            this.capturedAreas.push({
-              player: playerNum,
-              dots: [...enclosedDots]
-            });
-          }
+        if (enclosedDots.length > 0) {
+          this.capturedAreas.push({
+            player: playerNum,
+            dots: [...enclosedDots]
+          });
         }
       }
     }
@@ -168,7 +169,7 @@ export class BoardLogic {
 
   /**
    * Flood fill to check if an area is enclosed by a player's dots
-   * Uses all 8 directions (orthogonal and diagonal) for proper enclosure detection
+   * Includes dots that were captured by another player as part of the enclosed area
    * Returns: { enclosed: boolean, enclosedDots: [], touchesBorder: boolean }
    */
   floodFillCheck(startX, startY, playerNum, globalVisited) {
@@ -194,7 +195,6 @@ export class BoardLogic {
       }
 
       // If this dot is owned by opponent, the area is not enclosed by playerNum
-      // (opponent-owned dots break the enclosure)
       if (dot.owner !== null && dot.owner !== playerNum) {
         enclosed = false;
         continue;
@@ -205,11 +205,11 @@ export class BoardLogic {
         touchesBorder = true;
       }
 
-      // This is an unowned dot (may be previously captured), add to enclosed area
+      // This is an unowned dot (may be uncaptured or captured by another player), add to enclosed area
       enclosedDots.push({ x, y });
 
-      // Check all 8 neighbors (orthogonal and diagonal) for proper enclosure detection
-      const neighbors = this.getAdjacentPositions(x, y);
+      // Check all orthogonal neighbors
+      const neighbors = this.getOrthogonalNeighbors(x, y);
       for (const neighbor of neighbors) {
         const neighborKey = `${neighbor.x},${neighbor.y}`;
         if (!localVisited.has(neighborKey)) {

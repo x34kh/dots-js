@@ -21,6 +21,7 @@ export class GameRenderer {
     // Animation state for smooth hover transitions
     this.dotAnimations = new Map(); // key: "x,y", value: { targetScale, targetEmissive, currentScale, currentEmissive }
     this.animationSpeed = 0.15; // Smooth transition speed
+    this.territoryFillScale = 0.95; // Scale factor for territory fill squares
     
     this.playerColors = {
       1: new THREE.Color(0x00ffff), // Cyan
@@ -239,6 +240,7 @@ export class GameRenderer {
 
   /**
    * Create a mesh showing the captured area
+   * Includes both captured dots AND the boundary dots that form the perimeter
    */
   createCapturedAreaMesh(capturedDots, playerNum) {
     const gridSize = this.boardLogic.gridSize;
@@ -246,9 +248,41 @@ export class GameRenderer {
     const offset = (gridSize - 1) * spacing / 2;
     const color = this.playerColors[playerNum];
     
-    // Create a simple visual for each captured dot
+    // Collect all dots that should be included in the filled area:
+    // 1. The captured dots themselves
+    // 2. The boundary dots (owned by the player) that surround them
+    const allDotsInArea = new Set();
+    
+    // Add captured dots
     for (const { x, y } of capturedDots) {
-      const geometry = new THREE.PlaneGeometry(spacing * 0.8, spacing * 0.8);
+      allDotsInArea.add(`${x},${y}`);
+    }
+    
+    // Find and add boundary dots (owned dots adjacent to captured dots)
+    for (const { x, y } of capturedDots) {
+      // Check all 8 neighbors (orthogonal and diagonal)
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+            const dot = this.boardLogic.getDot(nx, ny);
+            if (dot && dot.owner === playerNum) {
+              allDotsInArea.add(`${nx},${ny}`);
+            }
+          }
+        }
+      }
+    }
+    
+    // Create a fill mesh for each dot in the area
+    for (const key of allDotsInArea) {
+      const [xStr, yStr] = key.split(',');
+      const x = parseInt(xStr);
+      const y = parseInt(yStr);
+      
+      const geometry = new THREE.PlaneGeometry(spacing * this.territoryFillScale, spacing * this.territoryFillScale);
       const material = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
