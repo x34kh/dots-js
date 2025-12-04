@@ -58,7 +58,7 @@ export class AuthService {
     try {
       const base64 = token.split('.')[1];
       if (base64) {
-        const payload = JSON.parse(atob(base64));
+        const payload = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
         const user = {
           id: payload.sub || `dev-${Date.now()}`,
           email: payload.email || 'dev@example.com',

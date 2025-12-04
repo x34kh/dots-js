@@ -3,12 +3,31 @@
  */
 
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+
+// Rate limiter for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Stricter rate limiter for anonymous user creation
+const anonCreateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // Limit each IP to 10 anonymous user creations per hour
+  message: { error: 'Too many anonymous accounts created, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 export function createRouter(authService, gameManager, eloService) {
   const router = Router();
 
   // Authentication routes
-  router.post('/auth/verify', async (req, res) => {
+  router.post('/auth/verify', authLimiter, async (req, res) => {
     const { token } = req.body;
     
     if (!token) {
@@ -25,7 +44,7 @@ export function createRouter(authService, gameManager, eloService) {
   });
 
   // Anonymous user creation
-  router.post('/auth/anonymous', (req, res) => {
+  router.post('/auth/anonymous', anonCreateLimiter, (req, res) => {
     const credentials = authService.createAnonymousUser();
     
     // Set secure HTTP-only cookie with the credentials
@@ -48,7 +67,7 @@ export function createRouter(authService, gameManager, eloService) {
   });
 
   // Verify anonymous credentials
-  router.post('/auth/anonymous/verify', (req, res) => {
+  router.post('/auth/anonymous/verify', authLimiter, (req, res) => {
     const { anonymousId, username, signature } = req.body;
 
     if (!anonymousId || !username || !signature) {

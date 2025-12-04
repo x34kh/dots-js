@@ -207,10 +207,10 @@ export class GoogleAuth {
    * Create a guest user for demo mode
    */
   createGuestUser() {
-    const guestId = 'guest-' + Math.random().toString(36).substr(2, 9);
+    const guestId = 'guest-' + Math.random().toString(36).slice(2, 11);
     this.user = {
       id: guestId,
-      name: 'Guest ' + guestId.substr(-4).toUpperCase(),
+      name: 'Guest ' + guestId.slice(-4).toUpperCase(),
       email: null,
       picture: null,
       isGuest: true

@@ -74,10 +74,15 @@ export class GameController {
       this.signOut();
     });
 
-    document.getElementById('btn-copy-link').addEventListener('click', () => {
+    document.getElementById('btn-copy-link').addEventListener('click', async () => {
       const linkInput = document.getElementById('share-link');
-      linkInput.select();
-      document.execCommand('copy');
+      try {
+        await navigator.clipboard.writeText(linkInput.value);
+      } catch {
+        // Fallback for older browsers
+        linkInput.select();
+        document.execCommand('copy');
+      }
     });
 
     // Game over buttons

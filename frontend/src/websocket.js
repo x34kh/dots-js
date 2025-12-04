@@ -145,7 +145,7 @@ export class WebSocketClient {
 
   attemptReconnect() {
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    const delay = this.reconnectDelay * (2 ** (this.reconnectAttempts - 1));
     
     console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
     

@@ -34,7 +34,7 @@ export class P2PNetwork {
    * Generate a unique game ID
    */
   generateGameId() {
-    return 'g-' + Math.random().toString(36).substr(2, 9);
+    return 'g-' + Math.random().toString(36).slice(2, 11);
   }
 
   /**
