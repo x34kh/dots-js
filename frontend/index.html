@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dots &amp; Boxes - Neon Edition</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="ui-overlay">
+      <div id="player-info">
+        <div class="player-card" id="player1-card">
+          <div class="player-avatar"></div>
+          <div class="player-name">Player 1</div>
+          <div class="player-score">0</div>
+        </div>
+        <div class="turn-indicator" id="turn-indicator">Your Turn</div>
+        <div class="player-card" id="player2-card">
+          <div class="player-avatar"></div>
+          <div class="player-name">Player 2</div>
+          <div class="player-score">0</div>
+        </div>
+      </div>
+      <div id="capture-notification" class="hidden">
+        <span class="capture-text">Territory Captured!</span>
+      </div>
+      <div id="game-menu" class="hidden">
+        <h1>Dots &amp; Boxes</h1>
+        <h2>Neon Edition</h2>
+        <button id="btn-demo-mode">Play Demo (P2P)</button>
+        <button id="btn-anonymous-mode">Play Anonymous</button>
+        <button id="btn-online-mode">Play Online (Google)</button>
+        <button id="btn-google-login" class="hidden">Sign in with Google</button>
+        <div id="user-info" class="hidden">
+          <span id="user-name"></span>
+          <button id="btn-sign-out">Sign Out</button>
+        </div>
+        <div id="share-link-container" class="hidden">
+          <input type="text" id="share-link" readonly>
+          <button id="btn-copy-link">Copy</button>
+        </div>
+      </div>
+      <div id="game-over" class="hidden">
+        <h2>Game Over!</h2>
+        <div id="winner-text"></div>
+        <div id="final-scores"></div>
+        <button id="btn-rematch">Rematch</button>
+        <button id="btn-new-game">New Game</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

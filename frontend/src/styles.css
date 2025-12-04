@@ -1,0 +1,304 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0a0a0f;
+  overflow: hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#ui-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#player-info {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+
+.player-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 15px 25px;
+  background: rgba(20, 20, 35, 0.85);
+  border-radius: 15px;
+  border: 2px solid rgba(100, 100, 150, 0.3);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  min-width: 120px;
+}
+
+.player-card.active {
+  border-color: #00ffff;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+}
+
+.player-card.player1 {
+  --player-color: #00ffff;
+}
+
+.player-card.player2 {
+  --player-color: #ff00ff;
+}
+
+.player-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--player-color, #666), #333);
+  margin-bottom: 8px;
+  border: 2px solid var(--player-color, #666);
+}
+
+.player-name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.player-score {
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--player-color, #fff);
+  text-shadow: 0 0 10px var(--player-color, transparent);
+}
+
+.turn-indicator {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #00ffff33, #ff00ff33);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.98); }
+}
+
+#capture-notification {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 20px 40px;
+  background: linear-gradient(135deg, rgba(0, 255, 200, 0.9), rgba(100, 0, 255, 0.9));
+  border-radius: 20px;
+  animation: captureAnim 1s ease-out forwards;
+}
+
+.capture-text {
+  font-size: 24px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+}
+
+@keyframes captureAnim {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  20% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+#game-menu {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 40px 60px;
+  background: rgba(15, 15, 30, 0.95);
+  border-radius: 25px;
+  border: 2px solid rgba(0, 255, 255, 0.3);
+  backdrop-filter: blur(15px);
+  text-align: center;
+  pointer-events: auto;
+}
+
+#game-menu h1 {
+  font-size: 48px;
+  color: #fff;
+  margin-bottom: 5px;
+  text-shadow: 0 0 30px #00ffff;
+}
+
+#game-menu h2 {
+  font-size: 20px;
+  color: #ff00ff;
+  margin-bottom: 30px;
+  text-transform: uppercase;
+  letter-spacing: 5px;
+}
+
+#game-menu button {
+  display: block;
+  width: 100%;
+  padding: 15px 30px;
+  margin: 10px 0;
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 2px solid #00ffff;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#game-menu button:hover {
+  background: linear-gradient(135deg, #00ffff33, #ff00ff33);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(0, 255, 255, 0.4);
+}
+
+#btn-google-login {
+  background: linear-gradient(135deg, #4285f4, #3367d6) !important;
+  border-color: #4285f4 !important;
+}
+
+#btn-anonymous-mode {
+  background: linear-gradient(135deg, #2d2d44, #1e1e2e) !important;
+  border-color: #9933ff !important;
+}
+
+#btn-anonymous-mode:hover {
+  box-shadow: 0 5px 20px rgba(153, 51, 255, 0.4) !important;
+}
+
+#user-info {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(0, 255, 200, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 255, 200, 0.3);
+}
+
+#user-name {
+  color: #00ffc8;
+  font-weight: bold;
+  margin-right: 15px;
+}
+
+#btn-sign-out {
+  padding: 8px 15px !important;
+  width: auto !important;
+  margin: 0 !important;
+  font-size: 14px !important;
+  background: transparent !important;
+  border-color: #ff6666 !important;
+  color: #ff6666 !important;
+}
+
+#btn-sign-out:hover {
+  background: rgba(255, 102, 102, 0.2) !important;
+}
+
+#share-link-container {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+#share-link {
+  flex: 1;
+  padding: 10px 15px;
+  border-radius: 8px;
+  border: 1px solid #00ffff;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 14px;
+}
+
+#btn-copy-link {
+  padding: 10px 20px !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+
+#game-over {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 40px 60px;
+  background: rgba(15, 15, 30, 0.95);
+  border-radius: 25px;
+  border: 2px solid #ff00ff;
+  backdrop-filter: blur(15px);
+  text-align: center;
+  pointer-events: auto;
+}
+
+#game-over h2 {
+  font-size: 42px;
+  color: #fff;
+  margin-bottom: 20px;
+  text-shadow: 0 0 30px #ff00ff;
+}
+
+#winner-text {
+  font-size: 24px;
+  color: #00ffff;
+  margin-bottom: 15px;
+}
+
+#final-scores {
+  font-size: 18px;
+  color: #aaa;
+  margin-bottom: 25px;
+}
+
+#game-over button {
+  display: inline-block;
+  padding: 12px 30px;
+  margin: 0 10px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 2px solid #ff00ff;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#game-over button:hover {
+  background: linear-gradient(135deg, #ff00ff33, #00ffff33);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(255, 0, 255, 0.4);
+}
+
+.hidden {
+  display: none !important;
+}
