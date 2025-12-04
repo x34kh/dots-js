@@ -55,16 +55,17 @@ body {
   backdrop-filter: blur(10px);
   pointer-events: auto;
   min-width: 120px;
-  position: fixed;
 }
 
 #player1-card {
+  position: fixed;
   left: 20px;
   top: 50%;
   transform: translateY(-50%);
 }
 
 #player2-card {
+  position: fixed;
   right: 20px;
   top: 50%;
   transform: translateY(-50%);

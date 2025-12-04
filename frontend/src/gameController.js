@@ -142,14 +142,11 @@ export class GameController {
    * Start a local game for 2 players on the same device
    */
   startLocalGame() {
-    this.stateMachine.setMode(GameMode.DEMO);
+    this.stateMachine.setMode(GameMode.LOCAL);
     this.stateMachine.isLocalMode = true;
     
-    // Create guest users for both players
-    this.auth.createGuestUser();
-    
-    // Set up both players
-    this.stateMachine.localPlayerId = 1; // Both players play locally, start with player 1
+    // Set up both players (no authentication needed for local play)
+    this.stateMachine.localPlayerId = 1;
     this.stateMachine.setPlayer(1, {
       id: 'local-player-1',
       name: 'Player 1'
