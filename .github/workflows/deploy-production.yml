@@ -10,7 +10,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: linux-training
     permissions:
       contents: read
 
@@ -76,7 +76,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: linux-training
     needs: build-and-push
     environment: production
     permissions:
