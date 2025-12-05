@@ -116,7 +116,72 @@ See [API.md](./docs/API.md) for detailed API documentation.
 - **Backend**: Node.js, Express, WebSocket (ws)
 - **Authentication**: Google OAuth, HMAC-signed cookies
 - **Real-time**: WebRTC (P2P), WebSocket (server)
-- **Deployment**: Docker, Nginx
+- **Deployment**: Docker, Nginx, Kubernetes
+
+## CI/CD & Deployment
+
+The project uses GitHub Actions for continuous integration and deployment to a local Kubernetes cluster.
+
+### Environments
+
+| Environment | Domain | Branch |
+|------------|--------|--------|
+| Production | dots.nixsupport.net | main |
+| Test | dots-test.nixsupport.net | all other branches |
+
+### CI/CD Workflows
+
+- **CI** (`ci.yml`): Runs on pull requests and pushes to main
+  - Lints and tests both frontend and backend
+  - Builds Docker images to verify they work
+
+- **Deploy Production** (`deploy-production.yml`): Runs on pushes to main
+  - Builds and pushes Docker images to GitHub Container Registry
+  - Deploys to the production Kubernetes namespace
+
+- **Deploy Test** (`deploy-test.yml`): Runs on pushes to non-main branches
+  - Builds and pushes Docker images with test tags
+  - Deploys to the test Kubernetes namespace
+
+### Required GitHub Secrets
+
+Configure these secrets in your repository settings:
+
+| Secret | Description |
+|--------|-------------|
+| `REGISTRY_URL` | Container registry URL (e.g., `registry.example.com`) |
+| `REGISTRY_USERNAME` | Registry username |
+| `REGISTRY_PASSWORD` | Registry password or token |
+| `REGISTRY_IMAGE_PREFIX` | Image prefix/path (e.g., `dots-js` or `myorg/dots-js`) |
+| `KUBECONFIG` | Base64-encoded kubeconfig for cluster access |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `ANONYMOUS_SECRET` | Secret for anonymous cookie signing |
+
+### Required Kubernetes Secrets
+
+Create cloudflared secrets for tunnel access:
+
+```bash
+# Production
+kubectl create secret generic cloudflared-secrets \
+  --namespace dots-production \
+  --from-literal=TUNNEL_TOKEN=<your-production-tunnel-token>
+
+# Test
+kubectl create secret generic cloudflared-secrets \
+  --namespace dots-test \
+  --from-literal=TUNNEL_TOKEN=<your-test-tunnel-token>
+```
+
+### Cloudflare Tunnel Setup
+
+1. Create two tunnels in Cloudflare Zero Trust dashboard:
+   - One for `dots.nixsupport.net` (production)
+   - One for `dots-test.nixsupport.net` (test)
+
+2. Configure each tunnel to route to the ingress controller in the respective namespace
+
+3. Add the tunnel tokens as Kubernetes secrets (see above)
 
 ## License
 

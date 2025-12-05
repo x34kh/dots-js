@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dots-backend
+  namespace: dots-test
+  labels:
+    app: dots-backend
+    environment: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dots-backend
+  template:
+    metadata:
+      labels:
+        app: dots-backend
+    spec:
+      containers:
+        - name: backend
+          image: ${REGISTRY}/${IMAGE_PREFIX}/backend:${IMAGE_TAG}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: NODE_ENV
+              value: "test"
+            - name: PORT
+              value: "8080"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: dots-secrets
+                  key: GOOGLE_CLIENT_ID
+            - name: ANONYMOUS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: dots-secrets
+                  key: ANONYMOUS_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dots-backend
+  namespace: dots-test
+spec:
+  selector:
+    app: dots-backend
+  ports:
+    - port: 8080
+      targetPort: 8080
