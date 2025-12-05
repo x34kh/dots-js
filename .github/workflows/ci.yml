@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    runs-on: linux-training
     permissions:
       contents: read
     steps:
@@ -56,7 +56,7 @@ jobs:
         run: npm run build
 
   docker-build:
-    runs-on: ubuntu-latest
+    runs-on: linux-training
     needs: lint-and-test
     permissions:
       contents: read
