@@ -23,26 +23,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        run: |
-          docker buildx create --use --name insecure-builder --driver docker-container \
-            --driver-opt network=host \
-            --buildkitd-flags '--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host'
-          
-          mkdir -p ~/.docker
-          cat > ~/.docker/buildx-config.toml <<EOF
-          [registry."${{ secrets.REGISTRY_URL }}"]
-            http = true
-            insecure = true
-          EOF
-          
-          docker buildx create --use --name insecure-builder --driver docker-container \
-            --driver-opt network=host \
-            --config ~/.docker/buildx-config.toml \
-            --buildkitd-flags '--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host' || true
-          
-          docker buildx inspect --bootstrap
-
       - name: Set output variables
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
@@ -66,28 +46,20 @@ jobs:
             type=ref,event=branch,prefix=test-
 
       - name: Build and push frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false
-          sbom: false
+        run: |
+          TAGS="${{ steps.meta-frontend.outputs.tags }}"
+          for tag in $TAGS; do
+            docker build -t $tag ./frontend
+            docker push $tag
+          done
 
       - name: Build and push backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: ${{ steps.meta-backend.outputs.tags }}
-          labels: ${{ steps.meta-backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false
-          sbom: false
+        run: |
+          TAGS="${{ steps.meta-backend.outputs.tags }}"
+          for tag in $TAGS; do
+            docker build -t $tag ./backend
+            docker push $tag
+          done
 
   deploy:
     runs-on: linux-training
