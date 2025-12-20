@@ -29,6 +29,10 @@ jobs:
           driver-opts: |
             image=moby/buildkit:latest
             network=host
+          config-inline: |
+            [registry."${{ secrets.REGISTRY_URL }}"]
+              http = true
+              insecure = true
 
       - name: Set output variables
         id: vars
