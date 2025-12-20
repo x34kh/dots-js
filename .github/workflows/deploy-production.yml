@@ -29,6 +29,7 @@ jobs:
           driver-opts: |
             image=moby/buildkit:latest
             network=host
+          buildkitd-flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host
           config-inline: |
             [registry."${{ secrets.REGISTRY_URL }}"]
               http = true
