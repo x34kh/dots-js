@@ -42,7 +42,7 @@ jobs:
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend
+          images: ${{ env.REGISTRY }}/frontend
           tags: |
             type=sha,prefix=
             type=raw,value=latest
@@ -51,7 +51,7 @@ jobs:
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/backend
+          images: ${{ env.REGISTRY }}/backend
           tags: |
             type=sha,prefix=
             type=raw,value=latest
