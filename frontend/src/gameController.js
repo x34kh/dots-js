@@ -571,6 +571,7 @@ export class GameController {
       // Set opponent's skin
       if (data.skin) {
         skinManager.setPlayerSkin(opponentId, data.skin);
+        this.renderer.updateSkinColors();
       }
       
       // Both players connected - start the game

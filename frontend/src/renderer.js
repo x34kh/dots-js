@@ -55,6 +55,41 @@ export class GameRenderer {
    */
   updateSkinColors() {
     this.playerColors = skinManager.getPlayerColors();
+    
+    // Update all owned dots to use new colors/textures
+    for (const [key, mesh] of this.dotMeshes) {
+      const owner = mesh.userData.owner;
+      if (owner) {
+        const color = this.playerColors[owner];
+        const anim = this.dotAnimations.get(key);
+        
+        if (anim) {
+          anim.targetColor = color.clone();
+        }
+        
+        // Apply pattern texture if available
+        const patternTexture = skinManager.getPatternTexture(owner);
+        if (patternTexture) {
+          mesh.material.map = patternTexture;
+          mesh.material.color.setHex(0xffffff);
+          mesh.material.needsUpdate = true;
+        } else {
+          mesh.material.map = null;
+          mesh.material.color.copy(color);
+          mesh.material.needsUpdate = true;
+        }
+        
+        // Update ring
+        if (mesh.userData.ring) {
+          mesh.userData.ring.material.color.copy(color);
+        }
+      }
+    }
+    
+    // Update captured area fills
+    for (let i = 1; i <= 2; i++) {
+      this.updateCapturedAreaFills(i);
+    }
   }
 
   init() {
@@ -427,6 +462,18 @@ export class GameRenderer {
       anim.targetEmissiveIntensity = 0.8;
       anim.targetScale = 1.2;
       mesh.userData.owner = playerNum;
+      
+      // Apply pattern texture if available
+      const patternTexture = skinManager.getPatternTexture(playerNum);
+      if (patternTexture) {
+        mesh.material.map = patternTexture;
+        mesh.material.color.setHex(0xffffff); // Use white so texture shows its true colors
+        mesh.material.needsUpdate = true;
+      } else {
+        mesh.material.map = null;
+        mesh.material.color.copy(color);
+        mesh.material.needsUpdate = true;
+      }
       
       // Update ring
       if (mesh.userData.ring) {
