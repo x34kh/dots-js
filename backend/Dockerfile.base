@@ -1,0 +1,16 @@
+# Backend Base Image with dependencies
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies (production only)
+RUN npm install --only=production
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# This image is ready to receive application code

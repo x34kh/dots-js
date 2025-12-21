@@ -1,0 +1,12 @@
+# Frontend Base Image with dependencies
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# This image is ready to receive source code and build

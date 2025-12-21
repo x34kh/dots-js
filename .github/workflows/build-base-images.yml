@@ -1,0 +1,40 @@
+name: Build Base Images
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'frontend/package*.json'
+      - 'backend/package*.json'
+      - 'frontend/Dockerfile.base'
+      - 'backend/Dockerfile.base'
+
+jobs:
+  build-base-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and push frontend base image
+        run: |
+          cd frontend
+          docker build -f Dockerfile.base -t ghcr.io/x34kh/dots-js-frontend-base:latest .
+          docker push ghcr.io/x34kh/dots-js-frontend-base:latest
+      
+      - name: Build and push backend base image
+        run: |
+          cd backend
+          docker build -f Dockerfile.base -t ghcr.io/x34kh/dots-js-backend-base:latest .
+          docker push ghcr.io/x34kh/dots-js-backend-base:latest

@@ -1,23 +1,15 @@
-# Backend Dockerfile
-FROM node:20-alpine
+# Backend Dockerfile - Fast deployment version
+# Uses pre-built base image with dependencies installed
+
+FROM ghcr.io/x34kh/dots-js-backend-base:latest
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm install --only=production
-
-# Copy source code
+# Copy application source code
 COPY src ./src
 
 # Expose port
 EXPOSE 8080
-
-# Set environment variables
-ENV NODE_ENV=production
-ENV PORT=8080
 
 # Start the server
 CMD ["node", "src/index.js"]
