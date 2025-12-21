@@ -75,7 +75,10 @@ export class GoogleAuth {
       callback: (response) => this.handleCredentialResponse(response),
       auto_select: true,
       cancel_on_tap_outside: false,
-      itp_support: true
+      itp_support: true,
+      context: 'signin',
+      ux_mode: 'popup',
+      use_fedcm_for_prompt: true
     });
 
     // Check for existing session
@@ -155,33 +158,42 @@ export class GoogleAuth {
       return;
     }
 
-    // Always ensure button is visible first as fallback
-    const btnElement = document.getElementById('btn-google-login');
-    if (btnElement) {
-      btnElement.classList.remove('hidden');
-      btnElement.style.display = 'block';
-    }
+    console.log('Triggering Google One Tap...');
     
-    // Try to show One Tap
+    // Trigger One Tap
     google.accounts.id.prompt((notification) => {
       const status = notification.getMomentType();
       const notDisplayedReason = notification.getNotDisplayedReason?.();
       const dismissedReason = notification.getDismissedReason?.();
+      const skippedReason = notification.getSkippedReason?.();
       
-      console.log('One Tap status:', status, 'notDisplayed:', notDisplayedReason, 'dismissed:', dismissedReason);
+      console.log('One Tap notification:', {
+        momentType: status,
+        isDisplayed: notification.isDisplayed?.(),
+        isNotDisplayed: notification.isNotDisplayed?.(),
+        isDismissed: notification.isDismissedMoment?.(),
+        isSkipped: notification.isSkippedMoment?.(),
+        notDisplayedReason,
+        dismissedReason,
+        skippedReason
+      });
       
-      // If One Tap showed, great! If not, button is already visible
-      if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
-        console.log('One Tap not shown - button fallback already visible');
-        // Render the Google button in case it hasn't been rendered yet
-        if (btnElement && !btnElement.hasChildNodes()) {
-          google.accounts.id.renderButton(btnElement, { 
-            theme: 'outline', 
-            size: 'large', 
-            width: '100%',
-            text: 'signin_with'
-          });
+      if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
+        console.error('One Tap not displayed:', notDisplayedReason || skippedReason);
+        console.log('Possible reasons:');
+        console.log('- Not signed into Google in this browser');
+        console.log('- Previously dismissed One Tap (cooldown active)');
+        console.log('- Cookies/privacy settings blocking');
+        console.log('- Page served over HTTP (needs HTTPS)');
+        
+        // Try to cancel cooldown
+        try {
+          google.accounts.id.cancel();
+        } catch (e) {
+          console.log('Could not cancel cooldown:', e);
         }
+      } else if (notification.isDisplayed?.()) {
+        console.log('One Tap displayed successfully!');
       }
     });
   }

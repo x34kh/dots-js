@@ -64,16 +64,19 @@ export class GameController {
         }
       });
       
-      // If Google auth is available, check if already signed in
+      // If Google auth is available, trigger One Tap
       if (this.config.googleClientId) {
         // Check if already signed in from session
         if (this.auth.isSignedIn()) {
           console.log('Already signed in, showing lobby');
           await this.autoStartOnlineMode();
         } else {
-          // Don't auto-show One Tap on load - let user click "Play Online" button
-          // Make sure the Play Online button is visible
-          console.log('Google auth available, waiting for user to click Play Online');
+          // Show Google One Tap on page load
+          console.log('Triggering Google One Tap on page load');
+          this.autoShowLobbyOnLoad = true;
+          setTimeout(() => {
+            this.auth.signIn();
+          }, 500); // Small delay to ensure DOM is ready
         }
       }
     } catch (error) {
@@ -631,14 +634,6 @@ export class GameController {
     
     // Require sign in for online mode
     if (!this.auth.isSignedIn()) {
-      // Show the sign-in button immediately in the menu
-      const btn = document.getElementById('btn-google-login');
-      if (btn) {
-        btn.classList.remove('hidden');
-        btn.style.display = 'block';
-      }
-      
-      // Try One Tap, but button is already visible as fallback
       this.autoShowLobbyOnLoad = true;
       this.auth.signIn();
       return;
