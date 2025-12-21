@@ -126,8 +126,8 @@ export class GameState {
     console.log('occupyDot result:', result);
 
     if (!result.success) {
-      console.log('Move rejected by boardLogic');
-      return { success: false, error: 'Invalid move' };
+      console.log('Move rejected by boardLogic - invalid position or dot not clickable');
+      return { success: false, error: `Invalid move - position (${x},${y}) is not available` };
     }
 
     // Record move

@@ -38,10 +38,20 @@ export class BoardLogic {
    * Check if a dot can be clicked/occupied
    */
   isDotClickable(x, y) {
+    console.log(`isDotClickable: checking x=${x}, y=${y}, gridSize=${this.gridSize}`);
+    
     const dot = this.getDot(x, y);
-    if (!dot) return false;
+    if (!dot) {
+      console.log('  -> Dot not found (out of bounds)');
+      return false;
+    }
+    
+    console.log(`  -> Dot found: owner=${dot.owner}, captured=${dot.captured}`);
+    
     // Dot is clickable if it's not owned and not captured
-    return dot.owner === null && !dot.captured;
+    const clickable = dot.owner === null && !dot.captured;
+    console.log(`  -> Clickable: ${clickable}`);
+    return clickable;
   }
 
   /**
