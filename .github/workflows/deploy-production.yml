@@ -13,13 +13,17 @@ env:
 jobs:
   deploy:
     runs-on: linux-training
-    # Only deploy if CI workflow succeeded
+    # Only deploy if CI workflow succeeded and docker-build job completed
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     environment: production
     permissions:
       contents: read
 
     steps:
+      - name: Wait for images to be available
+        run: |
+          echo "Waiting 10 seconds for images to be fully pushed..."
+          sleep 10
       - name: Checkout code
         uses: actions/checkout@v4
         with:
