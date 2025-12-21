@@ -63,18 +63,19 @@ export class BoardLogic {
    */
   occupyDot(x, y, playerNum) {
     if (!this.isDotClickable(x, y)) {
-      return { success: false, capturedDots: [] };
+      return { success: false, capturedDots: [], lostByPlayers: new Map() };
     }
 
     const dot = this.getDot(x, y);
     dot.owner = playerNum;
 
     // Calculate captured territories using greedy flood-fill algorithm
-    const capturedDots = this.calculateCapturedTerritories(playerNum);
+    const { capturedDots, lostByPlayers } = this.calculateCapturedTerritories(playerNum);
 
     return {
       success: true,
       capturedDots,
+      lostByPlayers,
       occupiedDot: { x, y }
     };
   }
@@ -126,6 +127,7 @@ export class BoardLogic {
    */
   calculateCapturedTerritories(playerNum) {
     const allCapturedDots = [];
+    const capturedEnemyDots = new Map(); // Map of enemyPlayerNum -> count
     const visited = new Set();
 
     // For each unowned dot (or captured by another player), check if it's enclosed by playerNum's dots
@@ -160,10 +162,14 @@ export class BoardLogic {
         for (const capturedDot of enemyDots) {
           const d = this.getDot(capturedDot.x, capturedDot.y);
           if (d && d.owner !== null && d.owner !== playerNum) {
+            const originalOwner = d.owner;
             d.owner = null; // Remove enemy ownership
             d.captured = true;
             d.capturedBy = playerNum;
             allCapturedDots.push(capturedDot);
+            
+            // Track which enemy player lost this dot
+            capturedEnemyDots.set(originalOwner, (capturedEnemyDots.get(originalOwner) || 0) + 1);
           }
         }
 
@@ -177,7 +183,10 @@ export class BoardLogic {
       }
     }
 
-    return allCapturedDots;
+    return { 
+      capturedDots: allCapturedDots,
+      lostByPlayers: capturedEnemyDots // Map of playerNum -> count of dots lost
+    };
   }
 
   /**

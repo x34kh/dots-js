@@ -717,6 +717,14 @@ export class GameController {
     }
     
     // Handle scoring
+    // First deduct points from players who lost territory
+    if (result.lostByPlayers) {
+      for (const [lostPlayerNum, lostDotCount] of result.lostByPlayers) {
+        this.stateMachine.addScore(lostPlayerNum, -lostDotCount);
+      }
+    }
+    
+    // Then award points to capturing player
     // Score = 1 for the occupied dot + number of captured dots
     const points = 1 + result.capturedDots.length;
     this.stateMachine.addScore(playerNum, points);
@@ -755,6 +763,14 @@ export class GameController {
       this.applyMove({ x, y }, playerNum, result.capturedDots);
       
       // Handle scoring
+      // First deduct points from players who lost territory
+      if (result.lostByPlayers) {
+        for (const [lostPlayerNum, lostDotCount] of result.lostByPlayers) {
+          this.stateMachine.addScore(lostPlayerNum, -lostDotCount);
+        }
+      }
+      
+      // Then award points to capturing player
       const points = 1 + result.capturedDots.length;
       this.stateMachine.addScore(playerNum, points);
       
