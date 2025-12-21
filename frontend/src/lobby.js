@@ -4,10 +4,11 @@
  */
 
 export class LobbyUI {
-  constructor(websocket, authState, serverUrl) {
+  constructor(websocket, authState, serverUrl, onResumeGame) {
     this.websocket = websocket;
     this.authState = authState;
     this.serverUrl = serverUrl;
+    this.onResumeGame = onResumeGame; // Callback to resume a game
     this.profileData = null;
     this.queueStats = null;
     this.currentGames = []; // Active async games
@@ -392,13 +393,13 @@ export class LobbyUI {
       }
       
       const gameState = await response.json();
+      console.log('Game state loaded:', gameState);
       
-      // Emit event for game controller to handle
-      if (this.wsClient) {
-        this.wsClient.emit('resumeGame', {
-          gameId,
-          gameState
-        });
+      // Call the callback to resume the game
+      if (this.onResumeGame) {
+        this.onResumeGame(gameId, gameState);
+      } else {
+        console.error('No onResumeGame callback provided');
       }
     } catch (error) {
       console.error('Error continuing game:', error);

@@ -694,7 +694,7 @@ export class GameController {
         userId: userId,
         name: this.auth.user?.name || this.auth.getAnonymousAuthData()?.username,
         picture: this.auth.user?.picture || null
-      }, this.config.serverUrl);
+      }, this.config.serverUrl, (gameId, gameState) => this.resumeSavedGame(gameId, gameState));
     }
     
     // Hide menu and game container
@@ -748,11 +748,6 @@ export class GameController {
       this.stateMachine.setPlayer(2, data.player2);
       
       this.startGame();
-    });
-    
-    this.wsClient.on('resumeGame', async (data) => {
-      // Resume a saved game from async storage
-      await this.resumeSavedGame(data.gameId, data.gameState);
     });
 
     this.wsClient.on('moveResult', (data) => {
@@ -868,10 +863,18 @@ export class GameController {
     if (this.lobby) {
       this.lobby.hide();
     }
-    document.getElementById('game-container').style.display = 'block';
-    document.getElementById('game-menu').classList.add('hidden');
-    document.getElementById('share-link-container').classList.add('hidden');
-    document.getElementById('btn-forfeit').classList.remove('hidden');
+    
+    // Show game elements
+    const gameContainer = document.getElementById('game-container');
+    const gameMenu = document.getElementById('game-menu');
+    const shareLink = document.getElementById('share-link-container');
+    const forfeitBtn = document.getElementById('btn-forfeit');
+    const backToLobbyBtn = document.getElementById('btn-back-to-lobby');
+    
+    gameContainer.style.display = 'block';
+    gameMenu.classList.add('hidden');
+    shareLink.classList.add('hidden');
+    forfeitBtn.classList.remove('hidden');
     
     // Set up game state
     this.stateMachine.setState(GameState.PLAYING);
@@ -881,6 +884,8 @@ export class GameController {
     // Determine which player we are
     const userId = this.auth.user?.sub || this.auth.user?.id;
     this.stateMachine.localPlayerId = (gameState.player1 === userId) ? 1 : 2;
+    
+    console.log('User ID:', userId, 'LocalPlayerId:', this.stateMachine.localPlayerId);
     
     // Set player info
     this.stateMachine.setPlayer(1, { 
@@ -902,6 +907,7 @@ export class GameController {
     let player2Score = 0;
     
     // Replay all moves to restore the board
+    console.log('Replaying', gameState.moves.length, 'moves');
     for (const move of gameState.moves) {
       const result = this.boardLogic.placeDot(move.x, move.y, move.player);
       if (result.valid) {
@@ -929,12 +935,10 @@ export class GameController {
     this.updatePlayerCards();
     
     // Show Back to Lobby button for async games
-    if (this.stateMachine.mode === GameMode.ASYNC) {
-      document.getElementById('btn-back-to-lobby').classList.remove('hidden');
-    }
+    backToLobbyBtn.classList.remove('hidden');
     
     notificationManager.show('Game resumed!', 'success');
-    console.log('Game resumed successfully');
+    console.log('Game resumed successfully. Current player:', gameState.currentPlayer, 'Local player:', this.stateMachine.localPlayerId);
   }
 
   returnToLobby() {
