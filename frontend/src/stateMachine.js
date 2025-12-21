@@ -47,6 +47,7 @@ export class StateMachine {
 
   setState(newState) {
     const oldState = this.state;
+    console.log(`[StateMachine] setState: ${oldState} -> ${newState}`);
     this.state = newState;
     this.emit('stateChange', { oldState, newState });
   }

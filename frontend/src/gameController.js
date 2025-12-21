@@ -29,6 +29,7 @@ export class GameController {
     this.auth = new GoogleAuth(this.config.googleClientId);
     this.selectedGridSize = 10; // Default grid size
     this.pendingGameMode = null; // Store the selected game mode before grid size selection
+    this.gameStarted = false; // Flag to prevent multiple startGame() calls
 
     this.init();
   }
@@ -556,8 +557,11 @@ export class GameController {
     });
 
     this.p2p.on('player', (data) => {
+      console.log('[P2P] player event received:', data);
+      console.log('[P2P] Current localPlayerId:', this.stateMachine.localPlayerId);
       notificationManager.show(`Received opponent info: ${data.name}`, 'success');
       const opponentId = this.stateMachine.localPlayerId === 1 ? 2 : 1;
+      console.log('[P2P] Setting opponent ID:', opponentId);
       this.stateMachine.setPlayer(opponentId, {
         id: data.playerId,
         name: data.name,
@@ -571,6 +575,7 @@ export class GameController {
       }
       
       // Both players connected - start the game
+      console.log('[P2P] Calling startGame()...');
       notificationManager.show('Both players ready! Starting game...', 'success');
       this.startGame();
     });
@@ -678,6 +683,15 @@ export class GameController {
   startGame() {
     notificationManager.show('Starting game...', 'info');
     console.log('startGame() called');
+    console.log('gameStarted flag:', this.gameStarted);
+    
+    // Prevent multiple calls to startGame()
+    if (this.gameStarted) {
+      console.log('Game already started, ignoring duplicate call');
+      return;
+    }
+    this.gameStarted = true;
+    
     console.log('Current state:', this.stateMachine.state);
     console.log('Mode:', this.stateMachine.mode);
     console.log('Players:', this.stateMachine.players);
@@ -1013,6 +1027,7 @@ export class GameController {
     this.boardLogic.reset();
     this.renderer.reset();
     this.stateMachine.isLocalMode = false;
+    this.gameStarted = false; // Reset the flag
     this.stateMachine.setState(GameState.MENU);
     
     // Hide forfeit button
