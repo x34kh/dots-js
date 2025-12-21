@@ -6,10 +6,10 @@
 import { StateMachine, GameState, GameMode } from './stateMachine.js';
 import { BoardLogic } from './boardLogic.js';
 import { GameRenderer } from './renderer.js';
-import { P2PNetwork, URLSignaling } from './p2p.js';
+import { P2PNetwork } from './p2p.js';
 import { WebSocketClient } from './websocket.js';
 import { GoogleAuth } from './auth.js';
-import { skinManager, SKINS } from './skins.js';
+import { skinManager } from './skins.js';
 import { notificationManager } from './notifications.js';
 
 export class GameController {
@@ -338,7 +338,7 @@ export class GameController {
   }
 
   setupStateMachineEvents() {
-    this.stateMachine.on('stateChange', ({ oldState, newState }) => {
+    this.stateMachine.on('stateChange', ({ newState }) => {
       this.updateUIForState(newState);
     });
 

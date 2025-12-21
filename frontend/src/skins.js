@@ -64,7 +64,6 @@ export class PatternGenerator {
     // Background color (slightly darker)
     const baseColor = new THREE.Color(color);
     const darkerColor = baseColor.clone().multiplyScalar(0.7);
-    const lighterColor = baseColor.clone().multiplyScalar(1.2);
     
     // Fill background
     ctx.fillStyle = `#${baseColor.getHexString()}`;

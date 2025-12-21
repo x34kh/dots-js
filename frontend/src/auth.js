@@ -153,7 +153,6 @@ export class GoogleAuth {
       return;
     }
 
-    /* global google */
     google.accounts.id.prompt((notification) => {
       if (notification.isNotDisplayed()) {
         // Show manual sign-in button if prompt is not displayed
@@ -175,7 +174,6 @@ export class GoogleAuth {
     sessionStorage.removeItem('google_token');
     
     if (this.initialized) {
-      /* global google */
       google.accounts.id.disableAutoSelect();
     }
     
