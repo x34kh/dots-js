@@ -22,10 +22,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Get image tag from CI run
         id: vars
-        run: echo "sha_short=$(git rev-parse --short ${{ github.event.workflow_run.head_sha }})" >> $GITHUB_OUTPUT
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
@@ -47,11 +49,20 @@ jobs:
           IMAGE_TAG: ${{ steps.vars.outputs.sha_short }}
           REGISTRY: ${{ secrets.REGISTRY_URL }}
         run: |
-          echo "Deploying with image tag: $IMAGE_TAG"
+          echo "=== Deploy Information ==="
+          echo "Workflow run ID: ${{ github.event.workflow_run.id }}"
+          echo "Workflow run SHA: ${{ github.event.workflow_run.head_sha }}"
+          echo "Image tag: $IMAGE_TAG"
+          echo "Frontend image: $REGISTRY/frontend:$IMAGE_TAG"
+          echo "Backend image: $REGISTRY/backend:$IMAGE_TAG"
+          echo "=========================="
           
           # Verify images exist in registry
+          echo "Verifying frontend image exists..."
           curl -f http://$REGISTRY/v2/frontend/manifests/$IMAGE_TAG || { echo "Frontend image not found"; exit 1; }
+          echo "Verifying backend image exists..."
           curl -f http://$REGISTRY/v2/backend/manifests/$IMAGE_TAG || { echo "Backend image not found"; exit 1; }
+          echo "Images verified successfully"
           
           # Create namespace if it doesn't exist
           kubectl create namespace dots-production --dry-run=client -o yaml | kubectl apply -f -
