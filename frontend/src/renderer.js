@@ -572,11 +572,12 @@ export class GameRenderer {
     // Get all relevant points (captured dots + boundary dots)
     const allPoints = new Set([...capturedSet, ...boundaryDots]);
     
-    // Create triangles connecting captured dots with their boundary dots
-    // Using cell-based triangulation for each captured dot
+    // Use cell-based triangulation to avoid overlaps
+    // Only triangulate each grid cell once
     const vertices = [];
     const indices = [];
-    const vertexMap = new Map(); // Map point key to vertex index
+    const vertexMap = new Map();
+    const processedCells = new Set();
     
     // Build vertices array
     for (const key of allPoints) {
@@ -587,69 +588,29 @@ export class GameRenderer {
       vertices.push(worldX(x), worldY(y), 0);
     }
     
-    // For each captured dot, create triangles with its neighbors
+    // Process each grid cell exactly once
     for (const { x, y } of capturedDots) {
-      const centerKey = `${x},${y}`;
-      const centerIdx = vertexMap.get(centerKey);
-      
-      // Get all adjacent points (both captured and boundary)
-      const neighbors = [];
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          const nKey = `${nx},${ny}`;
-          if (allPoints.has(nKey)) {
-            neighbors.push({ x: nx, y: ny, key: nKey, dx, dy });
-          }
-        }
-      }
-      
-      // Sort neighbors by angle for consistent triangulation
-      neighbors.sort((a, b) => {
-        const angleA = Math.atan2(a.dy, a.dx);
-        const angleB = Math.atan2(b.dy, b.dx);
-        return angleA - angleB;
-      });
-      
-      // Create triangles between center and each pair of adjacent neighbors
-      for (let i = 0; i < neighbors.length; i++) {
-        const n1 = neighbors[i];
-        const n2 = neighbors[(i + 1) % neighbors.length];
-        
-        // Only create triangle if the two neighbors are adjacent to each other
-        const dist = Math.abs(n1.dx - n2.dx) + Math.abs(n1.dy - n2.dy);
-        if (dist <= GameRenderer.NEIGHBOR_ADJACENCY_DISTANCE) {
-          const n1Idx = vertexMap.get(n1.key);
-          const n2Idx = vertexMap.get(n2.key);
-          
-          if (n1Idx !== undefined && n2Idx !== undefined) {
-            indices.push(centerIdx, n1Idx, n2Idx);
-          }
-        }
-      }
-    }
-    
-    // Also create triangles for cells where all 4 corners are in our point set
-    // This ensures we fill rectangular areas properly
-    for (const { x, y } of capturedDots) {
-      // Check 4 possible cells that this captured dot is part of
+      // Check all 4 cells where this captured dot could be a corner
       const cells = [
-        { corners: [[x, y], [x+1, y], [x+1, y+1], [x, y+1]] }, // bottom-left cell
-        { corners: [[x-1, y], [x, y], [x, y+1], [x-1, y+1]] }, // bottom-right cell
-        { corners: [[x-1, y-1], [x, y-1], [x, y], [x-1, y]] }, // top-right cell
-        { corners: [[x, y-1], [x+1, y-1], [x+1, y], [x, y]] }  // top-left cell
+        { x: x, y: y, corners: [[x, y], [x+1, y], [x+1, y+1], [x, y+1]] },
+        { x: x-1, y: y, corners: [[x-1, y], [x, y], [x, y+1], [x-1, y+1]] },
+        { x: x-1, y: y-1, corners: [[x-1, y-1], [x, y-1], [x, y], [x-1, y]] },
+        { x: x, y: y-1, corners: [[x, y-1], [x+1, y-1], [x+1, y], [x, y]] }
       ];
       
       for (const cell of cells) {
+        const cellKey = `${cell.x},${cell.y}`;
+        if (processedCells.has(cellKey)) continue;
+        
         const cornerKeys = cell.corners.map(([cx, cy]) => `${cx},${cy}`);
         const allCornersExist = cornerKeys.every(k => allPoints.has(k));
         
         if (allCornersExist) {
+          processedCells.add(cellKey);
           const [c0, c1, c2, c3] = cornerKeys.map(k => vertexMap.get(k));
-          // Two triangles to fill the quad
+          
           if (c0 !== undefined && c1 !== undefined && c2 !== undefined && c3 !== undefined) {
+            // Two triangles to fill the quad
             indices.push(c0, c1, c2);
             indices.push(c0, c2, c3);
           }
