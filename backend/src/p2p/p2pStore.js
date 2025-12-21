@@ -85,4 +85,4 @@ class P2PStore {
   }
 }
 
-module.exports = new P2PStore();
+export default new P2PStore();
