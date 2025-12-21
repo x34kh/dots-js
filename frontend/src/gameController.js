@@ -391,6 +391,15 @@ export class GameController {
       this.auth.createGuestUser();
     }
     
+    // Set local player as player 1 FIRST
+    this.stateMachine.localPlayerId = 1;
+    this.stateMachine.setPlayer(1, {
+      id: this.auth.getUser().id,
+      name: this.auth.getUser().name,
+      skin: skinManager.currentSkin
+    });
+    skinManager.setPlayerSkin(1, skinManager.currentSkin);
+    
     // Initialize P2P
     this.p2p = new P2PNetwork();
     this.setupP2PEvents();
@@ -410,15 +419,6 @@ export class GameController {
       // Show share link in input field as well
       document.getElementById('share-link').value = link;
       document.getElementById('share-link-container').classList.remove('hidden');
-      
-      // Set local player as player 1
-      this.stateMachine.localPlayerId = 1;
-      this.stateMachine.setPlayer(1, {
-        id: this.auth.getUser().id,
-        name: this.auth.getUser().name,
-        skin: skinManager.currentSkin
-      });
-      skinManager.setPlayerSkin(1, skinManager.currentSkin);
       
       // Wait for opponent
       this.stateMachine.setState(GameState.WAITING);
@@ -445,6 +445,15 @@ export class GameController {
       this.auth.createGuestUser();
     }
     
+    // Set local player as player 2 FIRST
+    this.stateMachine.localPlayerId = 2;
+    this.stateMachine.setPlayer(2, {
+      id: this.auth.getUser().id,
+      name: this.auth.getUser().name,
+      skin: skinManager.currentSkin
+    });
+    skinManager.setPlayerSkin(2, skinManager.currentSkin);
+    
     // Initialize P2P
     this.p2p = new P2PNetwork();
     this.setupP2PEvents();
@@ -452,15 +461,6 @@ export class GameController {
     try {
       // Join the game
       await this.p2p.joinGame(gameId);
-      
-      // Set local player as player 2
-      this.stateMachine.localPlayerId = 2;
-      this.stateMachine.setPlayer(2, {
-        id: this.auth.getUser().id,
-        name: this.auth.getUser().name,
-        skin: skinManager.currentSkin
-      });
-      skinManager.setPlayerSkin(2, skinManager.currentSkin);
       
     } catch (error) {
       console.error('Failed to join demo game:', error);
@@ -514,12 +514,18 @@ export class GameController {
       // Send player info with skin
       const playerNum = this.stateMachine.localPlayerId;
       const playerInfo = this.stateMachine.getPlayer(playerNum);
-      this.p2p.sendPlayerInfo({
-        playerId: playerInfo.id,
-        name: playerInfo.name,
-        skin: playerInfo.skin || skinManager.currentSkin,
-        playerNum: playerNum
-      });
+      
+      // Make sure player info exists before sending
+      if (playerInfo) {
+        this.p2p.sendPlayerInfo({
+          playerId: playerInfo.id,
+          name: playerInfo.name,
+          skin: playerInfo.skin || skinManager.currentSkin,
+          playerNum: playerNum
+        });
+      } else {
+        console.warn('Player info not set yet when P2P ready fired');
+      }
       
       // Don't start game yet - wait for player info exchange
     });
