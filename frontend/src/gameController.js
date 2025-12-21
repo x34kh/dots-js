@@ -457,16 +457,14 @@ export class GameController {
     });
 
     this.p2p.on('ready', () => {
+      console.log('P2P ready');
       // Send player info
       this.p2p.sendPlayerInfo({
         playerId: this.stateMachine.localPlayerId,
         name: this.auth.getUser().name
       });
       
-      // Start game if host
-      if (this.p2p.isHost) {
-        this.startGame();
-      }
+      // Don't start game yet - wait for player info exchange
     });
 
     this.p2p.on('player', (data) => {
@@ -476,10 +474,8 @@ export class GameController {
         name: data.name
       });
       
-      // Start game if joining player
-      if (!this.p2p.isHost) {
-        this.startGame();
-      }
+      // Both players connected - start the game
+      this.startGame();
     });
 
     this.p2p.on('move', (data) => {
