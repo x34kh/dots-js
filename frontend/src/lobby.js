@@ -15,7 +15,7 @@ export class LobbyUI {
   }
   
   getApiUrl() {
-    // Convert WebSocket URL to HTTP URL if needed
+    // If we have a configured serverUrl, use it
     if (this.serverUrl) {
       // If serverUrl is ws:// or wss://, convert to http:// or https://
       if (this.serverUrl.startsWith('ws://')) {
@@ -27,10 +27,23 @@ export class LobbyUI {
       }
     }
     
-    // Fallback to config or localhost
-    return window.GAME_CONFIG?.backendUrl || 
-           import.meta.env.VITE_BACKEND_URL || 
-           'http://localhost:3001';
+    // Try window.GAME_CONFIG or env vars
+    if (window.GAME_CONFIG?.backendUrl) {
+      return window.GAME_CONFIG.backendUrl;
+    }
+    
+    if (import.meta.env.VITE_BACKEND_URL) {
+      return import.meta.env.VITE_BACKEND_URL;
+    }
+    
+    // Derive from current location (same as WebSocket does)
+    const protocol = window.location.protocol; // http: or https:
+    const host = window.location.hostname;
+    const port = window.location.hostname === 'localhost' ? ':3001' : '';
+    const url = `${protocol}//${host}${port}`;
+    
+    console.log('Derived API URL from location:', url);
+    return url;
   }
 
   async show() {
