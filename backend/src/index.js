@@ -12,6 +12,7 @@ import { config } from 'dotenv';
 import { GameManager } from './game/gameManager.js';
 import { AuthService } from './auth/authService.js';
 import { EloService } from './elo/eloService.js';
+import { AsyncGameManager } from './game/asyncGameManager.js';
 import { WebSocketHandler } from './websocket/wsHandler.js';
 import { createRouter } from './routes/index.js';
 
@@ -25,6 +26,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const authService = new AuthService(GOOGLE_CLIENT_ID);
 const eloService = new EloService();
 const gameManager = new GameManager(eloService);
+const asyncGameManager = new AsyncGameManager(eloService);
 
 // Create Express app
 const app = express();
@@ -43,7 +45,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const wsHandler = new WebSocketHandler(wss, authService, gameManager);
 
 // Setup REST routes
-app.use('/api', createRouter(authService, gameManager, eloService));
+app.use('/api', createRouter(authService, gameManager, eloService, asyncGameManager));
 
 // Health check
 app.get('/health', (req, res) => {

@@ -24,7 +24,7 @@ const anonCreateLimiter = rateLimit({
   legacyHeaders: false
 });
 
-export function createRouter(authService, gameManager, eloService) {
+export function createRouter(authService, gameManager, eloService, asyncGameManager) {
   const router = Router();
 
   // Authentication routes
@@ -148,6 +148,81 @@ export function createRouter(authService, gameManager, eloService) {
     const limit = parseInt(req.query.limit) || 20;
     const matches = eloService.getMatchHistory(req.params.userId, limit);
     res.json(matches);
+  });
+
+  // Async/Turn-based game routes
+  router.post('/async/games', (req, res) => {
+    const { player1Id, player2Id, gridSize, isRanked } = req.body;
+    
+    if (!player1Id || !player2Id) {
+      return res.status(400).json({ error: 'Both player IDs required' });
+    }
+
+    try {
+      const game = asyncGameManager.createGame(
+        player1Id, 
+        player2Id, 
+        gridSize || 10, 
+        isRanked || false
+      );
+      res.json(game);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.get('/async/games/player/:userId', (req, res) => {
+    const games = asyncGameManager.getPlayerGames(req.params.userId);
+    res.json(games);
+  });
+
+  router.get('/async/games/:gameId', (req, res) => {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId query parameter required' });
+    }
+
+    try {
+      const game = asyncGameManager.getGameState(req.params.gameId, userId);
+      if (game) {
+        res.json(game);
+      } else {
+        res.status(404).json({ error: 'Game not found' });
+      }
+    } catch (error) {
+      res.status(403).json({ error: error.message });
+    }
+  });
+
+  router.post('/async/games/:gameId/move', (req, res) => {
+    const { userId, x, y } = req.body;
+    
+    if (userId === undefined || x === undefined || y === undefined) {
+      return res.status(400).json({ error: 'userId, x, and y required' });
+    }
+
+    try {
+      const result = asyncGameManager.makeMove(req.params.gameId, userId, x, y);
+      res.json(result);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.get('/async/games/:gameId/info', (req, res) => {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId query parameter required' });
+    }
+
+    const info = asyncGameManager.getGameInfo(req.params.gameId, userId);
+    if (info) {
+      res.json(info);
+    } else {
+      res.status(404).json({ error: 'Game not found' });
+    }
   });
 
   // P2P routes for WebRTC signaling

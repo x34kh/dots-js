@@ -10,6 +10,7 @@ export class LobbyUI {
     this.serverUrl = serverUrl;
     this.profileData = null;
     this.queueStats = null;
+    this.currentGames = []; // Active async games
     this.inQueue = false;
     this.currentQueueType = null;
   }
@@ -50,6 +51,9 @@ export class LobbyUI {
     // Load profile data
     await this.loadProfile();
     
+    // Load current games
+    await this.loadCurrentGames();
+    
     // Render lobby UI
     this.render();
     
@@ -61,6 +65,11 @@ export class LobbyUI {
     
     // Request initial queue stats
     this.requestQueueStats();
+    
+    // Poll for current games updates every 30 seconds
+    this.gamesInterval = setInterval(() => {
+      this.loadCurrentGames();
+    }, 30000);
   }
 
   async loadProfile() {
@@ -110,6 +119,30 @@ export class LobbyUI {
         winRate: 0,
         recentMatches: []
       };
+    }
+  }
+
+  async loadCurrentGames() {
+    const userId = this.authState.userId;
+    
+    if (!userId || userId === 'null' || userId === 'undefined') {
+      this.currentGames = [];
+      return;
+    }
+    
+    const apiUrl = this.getApiUrl();
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/async/games/player/${userId}`);
+      if (response.ok) {
+        this.currentGames = await response.json();
+        this.updateCurrentGamesDisplay();
+      } else {
+        this.currentGames = [];
+      }
+    } catch (error) {
+      console.error('Failed to load current games:', error);
+      this.currentGames = [];
     }
   }
 
@@ -177,6 +210,14 @@ export class LobbyUI {
                 <div class="stat-value">${this.profileData?.winRate || 'N/A'}</div>
                 <div class="stat-label">Win Rate</div>
               </div>
+            </div>
+          </div>
+          
+          <!-- Current Games Section -->
+          <div class="current-games-section">
+            <h3>Current Games (${this.currentGames.length}/5)</h3>
+            <div id="current-games-list" class="current-games-list">
+              ${this.renderCurrentGames()}
             </div>
           </div>
           
@@ -259,6 +300,93 @@ export class LobbyUI {
     }).join('');
   }
 
+  renderCurrentGames() {
+    if (!this.currentGames || this.currentGames.length === 0) {
+      return '<div class="no-games">No active games. Start a new turn-based match!</div>';
+    }
+    
+    return this.currentGames.map(game => {
+      const turnClass = game.isMyTurn ? 'your-turn' : 'opponent-turn';
+      const turnText = game.isMyTurn ? 'Your Turn' : "Opponent's Turn";
+      const timeRemaining = this.formatTimeRemaining(game.timeRemaining);
+      const rankedBadge = game.isRanked ? '<span class="ranked-badge">Ranked</span>' : '';
+      const gridInfo = `${game.gridSize}×${game.gridSize}`;
+      
+      return `
+        <div class="current-game-item ${turnClass}" data-game-id="${game.id}">
+          <div class="game-status">
+            <span class="turn-indicator">${turnText}</span>
+            ${rankedBadge}
+          </div>
+          <div class="game-opponent">
+            <strong>${game.opponentName}</strong>
+            <span class="opponent-elo">ELO: ${game.opponentRating}</span>
+          </div>
+          <div class="game-score">
+            <span>You: ${game.myScore}</span>
+            <span class="score-separator">-</span>
+            <span>Opp: ${game.opponentScore}</span>
+          </div>
+          <div class="game-meta">
+            <span class="grid-info">${gridInfo}</span>
+            <span class="time-remaining">${timeRemaining}</span>
+          </div>
+          <button class="btn-continue-game" data-game-id="${game.id}">
+            ${game.isMyTurn ? 'Play Now' : 'View Game'}
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  formatTimeRemaining(ms) {
+    if (ms <= 0) return 'Time expired!';
+    
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) {
+      return `${days}d ${hours % 24}h`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
+  updateCurrentGamesDisplay() {
+    const gamesList = document.getElementById('current-games-list');
+    if (gamesList) {
+      gamesList.innerHTML = this.renderCurrentGames();
+      // Re-attach event listeners for continue buttons
+      this.attachGameContinueListeners();
+    }
+  }
+
+  attachGameContinueListeners() {
+    const continueButtons = document.querySelectorAll('.btn-continue-game');
+    continueButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const gameId = e.target.dataset.gameId;
+        this.continueGame(gameId);
+      });
+    });
+  }
+
+  continueGame(gameId) {
+    console.log('Continue game:', gameId);
+    // TODO: Implement game continuation
+    // This will need to:
+    // 1. Load the full game state from server
+    // 2. Exit lobby
+    // 3. Initialize game board with saved state
+    // 4. Enable async mode for the game controller
+  }
+
   updateQueueStats() {
     if (!this.queueStats) return;
     
@@ -287,6 +415,9 @@ export class LobbyUI {
     document.getElementById('logout-btn')?.addEventListener('click', () => {
       this.logout();
     });
+    
+    // Attach current game continue listeners
+    this.attachGameContinueListeners();
   }
 
   joinQueue(isRanked) {
@@ -571,6 +702,144 @@ export class LobbyUI {
         text-align: center;
         color: rgba(255, 255, 255, 0.5);
         padding: 40px;
+      }
+      
+      /* Current Games Section */
+      .current-games-section h3 {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      
+      .current-games-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      
+      .current-game-item {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 20px;
+        border-left: 4px solid #2196F3;
+        transition: all 0.2s;
+      }
+      
+      .current-game-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+      
+      .current-game-item.your-turn {
+        border-left-color: #4CAF50;
+        animation: pulse-glow 2s ease-in-out infinite;
+      }
+      
+      .current-game-item.opponent-turn {
+        border-left-color: #FF9800;
+      }
+      
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 10px rgba(76, 175, 80, 0.3); }
+        50% { box-shadow: 0 0 20px rgba(76, 175, 80, 0.6); }
+      }
+      
+      .game-status {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      
+      .turn-indicator {
+        font-weight: bold;
+        font-size: 1.1em;
+      }
+      
+      .your-turn .turn-indicator {
+        color: #4CAF50;
+      }
+      
+      .opponent-turn .turn-indicator {
+        color: #FF9800;
+      }
+      
+      .game-opponent {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      
+      .opponent-elo {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9em;
+      }
+      
+      .game-score {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 15px;
+        margin: 15px 0;
+        font-size: 1.2em;
+        font-weight: bold;
+      }
+      
+      .score-separator {
+        color: rgba(255, 255, 255, 0.3);
+      }
+      
+      .game-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9em;
+      }
+      
+      .time-remaining {
+        font-weight: bold;
+        color: #2196F3;
+      }
+      
+      .your-turn .time-remaining {
+        color: #4CAF50;
+      }
+      
+      .btn-continue-game {
+        width: 100%;
+        padding: 12px;
+        background: #2196F3;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 1em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      .your-turn .btn-continue-game {
+        background: #4CAF50;
+      }
+      
+      .btn-continue-game:hover {
+        transform: scale(1.02);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+      
+      .your-turn .btn-continue-game:hover {
+        background: #45a049;
+      }
+      
+      .no-games {
+        text-align: center;
+        color: rgba(255, 255, 255, 0.5);
+        padding: 40px;
+        font-style: italic;
       }
       
       .btn {
