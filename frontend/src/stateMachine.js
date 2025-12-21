@@ -62,6 +62,10 @@ export class StateMachine {
     this.emit('playerUpdate', { playerNum, player: this.players[playerNum] });
   }
 
+  getPlayer(playerNum) {
+    return this.players[playerNum];
+  }
+
   setCurrentPlayer(playerNum) {
     this.currentPlayer = playerNum;
     this.emit('turnChange', playerNum);
