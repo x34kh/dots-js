@@ -357,6 +357,12 @@ export class GameController {
     if (gameId) {
       // Clear the URL parameters
       window.history.replaceState({}, '', window.location.pathname);
+      
+      // Hide all menu elements immediately
+      document.getElementById('game-menu').classList.add('hidden');
+      document.getElementById('grid-size-selector').classList.add('hidden');
+      document.getElementById('skin-selector').classList.add('hidden');
+      
       // Join the game
       this.joinDemoGame(gameId);
     }
@@ -670,23 +676,36 @@ export class GameController {
   }
 
   startGame() {
+    notificationManager.show('Starting game...', 'info');
+    console.log('startGame() called');
+    console.log('Current state:', this.stateMachine.state);
+    console.log('Mode:', this.stateMachine.mode);
+    console.log('Players:', this.stateMachine.players);
+    
     this.stateMachine.setState(GameState.PLAYING);
     this.stateMachine.setCurrentPlayer(1);
     
+    console.log('Hiding menu...');
     // Hide menu
     document.getElementById('game-menu').classList.add('hidden');
     document.getElementById('share-link-container').classList.add('hidden');
     
+    console.log('Showing forfeit button...');
     // Show forfeit button
     document.getElementById('btn-forfeit').classList.remove('hidden');
     
+    console.log('Resetting board and renderer...');
     // Reset board and scores
     this.boardLogic.reset();
     this.renderer.reset();
     this.stateMachine.reset();
     
+    console.log('Updating player cards...');
     // Show player cards (after reset so scores are updated)
     this.updatePlayerCards();
+    
+    notificationManager.show('Game started!', 'success');
+    console.log('startGame() completed');
   }
 
   forfeitGame() {
