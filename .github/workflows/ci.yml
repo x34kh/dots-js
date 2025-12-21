@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  REGISTRY: ${{ secrets.REGISTRY_URL }}
+
 jobs:
   lint-and-test:
     runs-on: linux-training
@@ -56,27 +59,59 @@ jobs:
     needs: lint-and-test
     permissions:
       contents: read
+    # Only build and push images on push to main or PR
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    outputs:
+      image-tag: ${{ steps.vars.outputs.sha_short }}
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Set output variables
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Build frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: false
-          tags: dots-frontend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Build and push frontend image
+        run: |
+          # Verify registry is accessible
+          curl -f http://${{ secrets.REGISTRY_URL }}/v2/ || { echo "Registry not accessible"; exit 1; }
+          
+          # Build with appropriate tag
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            TAG="${{ env.REGISTRY }}/frontend:${{ steps.vars.outputs.sha_short }}"
+            TAG_LATEST="${{ env.REGISTRY }}/frontend:latest"
+          else
+            TAG="${{ env.REGISTRY }}/frontend:test-${{ steps.vars.outputs.sha_short }}"
+          fi
+          
+          echo "Building $TAG"
+          docker build -t $TAG ./frontend
+          docker push $TAG
+          
+          # Push latest tag for main branch
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            docker tag $TAG $TAG_LATEST
+            docker push $TAG_LATEST
+          fi
 
-      - name: Build backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: false
-          tags: dots-backend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Build and push backend image
+        run: |
+          # Build with appropriate tag
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            TAG="${{ env.REGISTRY }}/backend:${{ steps.vars.outputs.sha_short }}"
+            TAG_LATEST="${{ env.REGISTRY }}/backend:latest"
+          else
+            TAG="${{ env.REGISTRY }}/backend:test-${{ steps.vars.outputs.sha_short }}"
+          fi
+          
+          echo "Building $TAG"
+          docker build -t $TAG ./backend
+          docker push $TAG
+          
+          # Push latest tag for main branch
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            docker tag $TAG $TAG_LATEST
+            docker push $TAG_LATEST
+          fi

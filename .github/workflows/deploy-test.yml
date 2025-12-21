@@ -1,77 +1,20 @@
 name: Deploy Test
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches-ignore: [main]
 
 env:
   REGISTRY: ${{ secrets.REGISTRY_URL }}
-  IMAGE_PREFIX: ${{ secrets.REGISTRY_IMAGE_PREFIX }}
 
 jobs:
-  build-and-push:
-    runs-on: linux-training
-    permissions:
-      contents: read
-
-    outputs:
-      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
-      backend-image: ${{ steps.meta-backend.outputs.tags }}
-      image-tag: ${{ steps.vars.outputs.sha_short }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set output variables
-        id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Extract metadata for frontend
-        id: meta-frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/frontend
-          tags: |
-            type=sha,prefix=test-
-            type=ref,event=branch,prefix=test-
-
-      - name: Extract metadata for backend
-        id: meta-backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/backend
-          tags: |
-            type=sha,prefix=test-
-            type=ref,event=branch,prefix=test-
-
-      - name: Build and push frontend image
-        run: |
-          # Verify registry is accessible
-          curl -f http://${{ secrets.REGISTRY_URL }}/v2/ || { echo "Registry not accessible"; exit 1; }
-          
-          # Verify Docker can see insecure registry config
-          docker info | grep -A 3 'Insecure Registries' || { echo "Insecure registry not configured"; exit 1; }
-          
-          TAGS="${{ steps.meta-frontend.outputs.tags }}"
-          for tag in $TAGS; do
-            echo "Building $tag"
-            docker build -t $tag ./frontend
-            echo "Pushing $tag"
-            docker push $tag || { echo "Failed to push $tag"; docker info | grep -A 5 'Insecure'; exit 1; }
-          done
-
-      - name: Build and push backend image
-        run: |
-          TAGS="${{ steps.meta-backend.outputs.tags }}"
-          for tag in $TAGS; do
-            docker build -t $tag ./backend
-            docker push $tag
-          done
-
   deploy:
     runs-on: linux-training
-    needs: build-and-push
+    # Only deploy if CI workflow succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     environment: test
     permissions:
       contents: read
@@ -79,6 +22,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Get image tag from CI run
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short ${{ github.event.workflow_run.head_sha }})" >> $GITHUB_OUTPUT
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
@@ -97,10 +44,15 @@ jobs:
 
       - name: Deploy to Kubernetes
         env:
-          IMAGE_TAG: test-${{ needs.build-and-push.outputs.image-tag }}
+          IMAGE_TAG: test-${{ steps.vars.outputs.sha_short }}
           REGISTRY: ${{ secrets.REGISTRY_URL }}
-          IMAGE_PREFIX: ${{ secrets.REGISTRY_IMAGE_PREFIX }}
         run: |
+          echo "Deploying with image tag: $IMAGE_TAG"
+          
+          # Verify images exist in registry
+          curl -f http://$REGISTRY/v2/frontend/manifests/$IMAGE_TAG || { echo "Frontend image not found"; exit 1; }
+          curl -f http://$REGISTRY/v2/backend/manifests/$IMAGE_TAG || { echo "Backend image not found"; exit 1; }
+          
           # Create namespace if it doesn't exist
           kubectl create namespace dots-test --dry-run=client -o yaml | kubectl apply -f -
           
@@ -111,10 +63,16 @@ jobs:
             --from-literal=ANONYMOUS_SECRET="${{ secrets.ANONYMOUS_SECRET }}" \
             --dry-run=client -o yaml | kubectl apply -f -
           
-          # Apply manifests with image substitution
-          for file in k8s/test/*.yaml; do
-            envsubst < "$file" | kubectl apply -f -
-          done
+          # Update image tags in deployment files and apply
+          cd k8s/test
+          sed "s|image: .*frontend.*|image: $REGISTRY/frontend:$IMAGE_TAG|g" frontend.yaml | kubectl apply -f -
+          sed "s|image: .*backend.*|image: $REGISTRY/backend:$IMAGE_TAG|g" backend.yaml | kubectl apply -f -
+          
+          # Apply other manifests
+          kubectl apply -f namespace.yaml
+          kubectl apply -f redis.yaml
+          kubectl apply -f cloudflared.yaml
+          kubectl apply -f ingress.yaml
           
           # Wait for rollout
           kubectl rollout status deployment/dots-frontend -n dots-test --timeout=300s
