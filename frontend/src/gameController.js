@@ -12,6 +12,7 @@ import { GoogleAuth } from './auth.js';
 import { skinManager } from './skins.js';
 import { notificationManager } from './notifications.js';
 import { LobbyUI } from './lobby.js';
+import { faviconStatus } from './faviconStatus.js';
 
 export class GameController {
   constructor(config = {}) {
@@ -42,6 +43,9 @@ export class GameController {
   async init() {
     // Initialize renderer
     this.renderer = new GameRenderer(this.canvas, this.boardLogic);
+
+    // Initialize favicon status (start as disconnected)
+    faviconStatus.setDisconnected();
 
     // Setup event listeners
     this.setupUIEvents();
@@ -640,7 +644,7 @@ export class GameController {
     });
 
     this.p2p.on('disconnected', () => {
-      alert('Opponent disconnected');
+      notificationManager.show('Opponent disconnected', 'error');
       this.returnToMenu();
     });
   }
@@ -767,7 +771,15 @@ export class GameController {
     });
 
     this.wsClient.on('disconnected', () => {
-      alert('Disconnected from server');
+      faviconStatus.setDisconnected();
+    });
+
+    this.wsClient.on('reconnecting', () => {
+      faviconStatus.setReconnecting();
+    });
+
+    this.wsClient.on('connected', () => {
+      faviconStatus.setConnected();
     });
   }
 

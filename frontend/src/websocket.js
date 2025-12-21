@@ -50,6 +50,7 @@ export class WebSocketClient {
         this.socket.onopen = () => {
           console.log('WebSocket connected');
           this.reconnectAttempts = 0;
+          this.emit('connected');
           
           // Authenticate with Google token
           this.send({
@@ -103,6 +104,7 @@ export class WebSocketClient {
         this.socket.onopen = () => {
           console.log('WebSocket connected (anonymous)');
           this.reconnectAttempts = 0;
+          this.emit('connected');
           
           // Authenticate with anonymous credentials
           this.send({
@@ -148,6 +150,7 @@ export class WebSocketClient {
     const delay = this.reconnectDelay * (2 ** (this.reconnectAttempts - 1));
     
     console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    this.emit('reconnecting');
     
     setTimeout(() => {
       if (this.isAnonymous && this.anonymousCredentials) {
