@@ -487,11 +487,11 @@ export class WebSocketHandler {
       const player1Name = game.players[1].name || 'Player 1';
       const player2Name = game.players[2].name || 'Player 2';
       
-      // Create async game with same grid size
+      // Create async game with same grid size as realtime game
       const asyncGame = this.asyncGameManager.createGame(
         player1Id,
         player2Id,
-        game.gridSize || 10,
+        game.gridSize || 5, // Use stored gridSize, default to 5
         isRanked,
         player1Name,
         player2Name
@@ -500,7 +500,7 @@ export class WebSocketHandler {
       // Map realtime gameId to async gameId
       this.gameToAsync.set(realtimeGameId, asyncGame.id);
       
-      console.log(`Saved realtime game ${realtimeGameId} as async game ${asyncGame.id}`);
+      console.log(`Saved realtime game ${realtimeGameId} (gridSize: ${game.gridSize}) as async game ${asyncGame.id}`);
     } catch (error) {
       console.error('Failed to save game to async storage:', error);
     }

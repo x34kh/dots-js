@@ -751,11 +751,48 @@ export class GameController {
     });
 
     this.wsClient.on('moveResult', (data) => {
+      console.log('Received moveResult:', data);
       if (data.success) {
-        this.applyMove(data.move, data.playerNum, data.captures);
+        const playerNum = data.playerNum;
+        
+        // Apply the move locally now that server confirmed it
+        const result = this.boardLogic.occupyDot(data.move.x, data.move.y, playerNum);
+        
+        if (result.success) {
+          // Apply visual changes
+          this.applyMove(data.move, playerNum, result.capturedDots);
+          
+          // Handle scoring
+          if (result.lostByPlayers) {
+            for (const [lostPlayerNum, lostDotCount] of result.lostByPlayers) {
+              this.stateMachine.addScore(lostPlayerNum, -lostDotCount);
+            }
+          }
+          
+          // Award points to capturing player
+          const points = 1 + result.capturedDots.length;
+          this.stateMachine.addScore(playerNum, points);
+          
+          if (result.capturedDots.length > 0) {
+            this.showCaptureNotification();
+          }
+          
+          // Switch turns
+          this.stateMachine.switchTurn();
+          
+          // Update UI
+          this.updatePlayerCards();
+          
+          // Check game over
+          if (data.gameOver || this.boardLogic.isGameOver()) {
+            this.endGame();
+          }
+        } else {
+          console.error('Failed to apply confirmed move locally:', result);
+        }
       } else {
         console.error('Move rejected:', data.error);
-        // Revert local state if needed
+        notificationManager.show('Invalid move: ' + data.error, 'error');
       }
     });
 
@@ -1137,7 +1174,24 @@ export class GameController {
   async makeMove(x, y) {
     const playerNum = this.stateMachine.currentPlayer;
     
-    // Occupy the dot
+    // For online games, send to server first and wait for confirmation
+    if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
+      // Check if WebSocket is connected
+      if (!this.wsClient.isConnected()) {
+        notificationManager.show('Connection lost - reconnecting...', 'error');
+        return;
+      }
+      
+      // Clear previews
+      this.renderer.clearPreviews();
+      
+      // Send move to server - it will respond with moveResult
+      console.log('Sending move to server:', x, y);
+      this.wsClient.submitMove(x, y);
+      return; // Wait for server response in moveResult handler
+    }
+    
+    // For P2P and async games, validate and apply locally
     const result = this.boardLogic.occupyDot(x, y, playerNum);
     
     if (!result.success) {
@@ -1154,12 +1208,6 @@ export class GameController {
     // Send move to opponent/server
     if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
       this.p2p.sendMove({ x, y, playerNum });
-    } else if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
-      // Check if WebSocket is connected
-      if (!this.wsClient.isConnected()) {
-        notificationManager.show('Connection lost - move will be sent when reconnected', 'info');
-      }
-      this.wsClient.submitMove(x, y); // Send dot coordinates for new game format
     } else if (this.stateMachine.mode === GameMode.ASYNC) {
       // Send move to async API
       await this.submitAsyncMove(x, y);
