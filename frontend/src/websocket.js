@@ -328,13 +328,13 @@ export class WebSocketClient {
   }
 
   /**
-   * Submit a move
+   * Submit a move (dot occupation)
    */
-  submitMove(x1, y1, x2, y2) {
+  submitMove(x, y) {
     this.send({
       type: 'move',
       gameId: this.gameId,
-      move: { x1, y1, x2, y2 }
+      move: { x, y }
     });
   }
 

@@ -314,13 +314,13 @@ export class WebSocketHandler {
 
     const result = this.gameManager.makeMove(
       client.userId,
-      move.x1, move.y1,
-      move.x2, move.y2
+      move.x,
+      move.y
     );
 
     if (result.success) {
       // Sync move to async storage
-      this.syncMoveToAsync(result.gameId, move.x1, move.y1, client.userId);
+      this.syncMoveToAsync(result.gameId, move.x, move.y, client.userId);
       
       // Send result to moving player
       this.send(ws, {
@@ -450,8 +450,12 @@ export class WebSocketHandler {
   }
 
   send(ws, message) {
-    if (ws.readyState === 1) { // OPEN
-      ws.send(JSON.stringify(message));
+    try {
+      if (ws.readyState === 1) { // OPEN
+        ws.send(JSON.stringify(message));
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
     }
   }
 

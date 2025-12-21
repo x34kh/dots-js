@@ -133,7 +133,7 @@ export class GameManager {
   /**
    * Make a move in a game
    */
-  makeMove(playerId, x1, y1, x2, y2) {
+  makeMove(playerId, x, y) {
     const gameId = this.playerGames.get(playerId);
     if (!gameId) {
       return { success: false, error: 'Not in a game' };
@@ -144,7 +144,7 @@ export class GameManager {
       return { success: false, error: 'Game not found' };
     }
 
-    const result = game.makeMove(playerId, x1, y1, x2, y2);
+    const result = game.makeMove(playerId, x, y);
 
     if (result.success && result.gameOver) {
       this.handleGameOver(gameId);

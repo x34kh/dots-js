@@ -90,7 +90,7 @@ export class GameState {
     return this.getPlayerNumber(playerId) === this.currentPlayer;
   }
 
-  makeMove(playerId, x1, y1, x2, y2) {
+  makeMove(playerId, x, y) {
     // Validate it's player's turn
     if (!this.isPlayerTurn(playerId)) {
       return { success: false, error: 'Not your turn' };
@@ -102,7 +102,7 @@ export class GameState {
     }
 
     const playerNum = this.currentPlayer;
-    const result = this.boardLogic.placeLine(x1, y1, x2, y2, playerNum);
+    const result = this.boardLogic.occupyDot(x, y, playerNum);
 
     if (!result.success) {
       return { success: false, error: 'Invalid move' };
@@ -111,21 +111,25 @@ export class GameState {
     // Record move
     this.moves.push({
       player: playerNum,
-      move: { x1, y1, x2, y2 },
-      captures: result.capturedTerritories,
+      move: { x, y },
+      captures: result.capturedDots,
       timestamp: new Date()
     });
 
-    // Handle captures and scoring
-    let continuesTurn = false;
-    if (result.capturedTerritories.length > 0) {
-      const points = result.capturedTerritories.reduce((sum, t) => sum + t.area, 0);
-      this.scores[playerNum] += points;
-      continuesTurn = true;
-    } else {
-      // Switch turns
-      this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
+    // Handle scoring: 1 for the dot + captured dots
+    // First deduct points from players who lost territory
+    if (result.lostByPlayers) {
+      for (const [lostPlayerNum, lostDotCount] of result.lostByPlayers) {
+        this.scores[lostPlayerNum] -= lostDotCount;
+      }
     }
+    
+    // Then award points to capturing player
+    const points = 1 + result.capturedDots.length;
+    this.scores[playerNum] += points;
+
+    // Always switch turns in dot occupation game
+    this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
 
     // Check game over
     if (this.boardLogic.isGameOver()) {
@@ -134,8 +138,8 @@ export class GameState {
 
     return {
       success: true,
-      captures: result.capturedTerritories,
-      continuesTurn,
+      captures: result.capturedDots,
+      continuesTurn: false, // No extra turns in dot game
       currentPlayer: this.currentPlayer,
       gameOver: this.status === GameStatus.FINISHED
     };
