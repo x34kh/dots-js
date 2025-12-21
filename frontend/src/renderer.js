@@ -572,12 +572,10 @@ export class GameRenderer {
     // Get all relevant points (captured dots + boundary dots)
     const allPoints = new Set([...capturedSet, ...boundaryDots]);
     
-    // Use cell-based triangulation to avoid overlaps
-    // Only triangulate each grid cell once
     const vertices = [];
     const indices = [];
     const vertexMap = new Map();
-    const processedCells = new Set();
+    const triangleSet = new Set(); // Track unique triangles to avoid duplicates
     
     // Build vertices array
     for (const key of allPoints) {
@@ -588,9 +586,20 @@ export class GameRenderer {
       vertices.push(worldX(x), worldY(y), 0);
     }
     
-    // Process each grid cell exactly once
+    // Helper to add triangle only if not already added
+    const addTriangle = (i0, i1, i2) => {
+      // Sort indices to create canonical representation
+      const sorted = [i0, i1, i2].sort((a, b) => a - b);
+      const key = sorted.join(',');
+      if (!triangleSet.has(key)) {
+        triangleSet.add(key);
+        indices.push(i0, i1, i2);
+      }
+    };
+    
+    // First pass: create triangles for complete rectangular cells
+    const processedCells = new Set();
     for (const { x, y } of capturedDots) {
-      // Check all 4 cells where this captured dot could be a corner
       const cells = [
         { x: x, y: y, corners: [[x, y], [x+1, y], [x+1, y+1], [x, y+1]] },
         { x: x-1, y: y, corners: [[x-1, y], [x, y], [x, y+1], [x-1, y+1]] },
@@ -610,9 +619,51 @@ export class GameRenderer {
           const [c0, c1, c2, c3] = cornerKeys.map(k => vertexMap.get(k));
           
           if (c0 !== undefined && c1 !== undefined && c2 !== undefined && c3 !== undefined) {
-            // Two triangles to fill the quad
-            indices.push(c0, c1, c2);
-            indices.push(c0, c2, c3);
+            addTriangle(c0, c1, c2);
+            addTriangle(c0, c2, c3);
+          }
+        }
+      }
+    }
+    
+    // Second pass: fill any remaining gaps with fan triangulation
+    for (const { x, y } of capturedDots) {
+      const centerKey = `${x},${y}`;
+      const centerIdx = vertexMap.get(centerKey);
+      
+      // Get adjacent points
+      const neighbors = [];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          const nKey = `${nx},${ny}`;
+          if (allPoints.has(nKey)) {
+            neighbors.push({ x: nx, y: ny, key: nKey, dx, dy });
+          }
+        }
+      }
+      
+      // Sort neighbors by angle
+      neighbors.sort((a, b) => {
+        const angleA = Math.atan2(a.dy, a.dx);
+        const angleB = Math.atan2(b.dy, b.dx);
+        return angleA - angleB;
+      });
+      
+      // Create triangles between center and adjacent neighbor pairs
+      for (let i = 0; i < neighbors.length; i++) {
+        const n1 = neighbors[i];
+        const n2 = neighbors[(i + 1) % neighbors.length];
+        
+        const dist = Math.abs(n1.dx - n2.dx) + Math.abs(n1.dy - n2.dy);
+        if (dist <= GameRenderer.NEIGHBOR_ADJACENCY_DISTANCE) {
+          const n1Idx = vertexMap.get(n1.key);
+          const n2Idx = vertexMap.get(n2.key);
+          
+          if (n1Idx !== undefined && n2Idx !== undefined) {
+            addTriangle(centerIdx, n1Idx, n2Idx);
           }
         }
       }
