@@ -769,29 +769,43 @@ body {
     transform: translateX(-50%);
   }
 
-  /* Move forfeit button higher to avoid overlap with player cards */
+  /* Stack buttons vertically in portrait mode to avoid overlap */
   #btn-forfeit {
-    bottom: 100px;
-    transform: translateX(calc(-50% - 100px));
+    bottom: 180px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 40px);
+    max-width: 300px;
   }
   
   #btn-forfeit:hover {
-    transform: translateX(calc(-50% - 100px)) translateY(-2px);
+    transform: translateX(-50%) translateY(-2px);
   }
   
-  /* Move back to lobby button higher to avoid overlap with player cards */
+  /* Back to lobby button above forfeit */
   #btn-back-to-lobby {
-    bottom: 100px;
-    transform: translateX(calc(-50% + 100px));
+    bottom: 240px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 40px);
+    max-width: 300px;
   }
   
   #btn-back-to-lobby:hover {
-    transform: translateX(calc(-50% + 100px)) translateY(-2px);
+    transform: translateX(-50%) translateY(-2px);
   }
 
-  /* Adjust confirm button position */
+  /* Confirm button at the bottom */
   #btn-confirm-move {
-    bottom: 100px;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 40px);
+    max-width: 300px;
+  }
+  
+  #btn-confirm-move:hover {
+    transform: translateX(-50%) translateY(-2px);
   }
 }
 

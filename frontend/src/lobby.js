@@ -900,6 +900,19 @@ export class LobbyUI {
           grid-template-columns: repeat(3, 1fr);
         }
       }
+      
+      /* Portrait orientation scrolling fix */
+      @media (orientation: portrait) {
+        #lobby-container {
+          height: 100vh;
+          overflow-y: auto;
+          overflow-x: hidden;
+        }
+        
+        .lobby-container {
+          padding-bottom: 50px;
+        }
+      }
     `;
     
     document.head.appendChild(style);
