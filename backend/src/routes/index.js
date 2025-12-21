@@ -186,11 +186,18 @@ export function createRouter(authService, gameManager, eloService, asyncGameMana
     try {
       const game = asyncGameManager.getGameState(req.params.gameId, userId);
       if (game) {
+        console.log(`Fetching game state for ${req.params.gameId}:`, {
+          moveCount: game.moves?.length || 0,
+          currentPlayer: game.currentPlayer,
+          player1Id: game.player1Id,
+          player2Id: game.player2Id
+        });
         res.json(game);
       } else {
         res.status(404).json({ error: 'Game not found' });
       }
     } catch (error) {
+      console.error('Error fetching game state:', error);
       res.status(403).json({ error: error.message });
     }
   });

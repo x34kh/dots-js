@@ -65,10 +65,18 @@ export class AsyncGameManager {
    * Make a move in an async game
    */
   makeMove(gameId, userId, x, y) {
+    console.log(`AsyncGameManager.makeMove: gameId=${gameId}, userId=${userId}, x=${x}, y=${y}`);
     const game = this.games.get(gameId);
     if (!game) {
+      console.error('Game not found:', gameId);
       throw new Error('Game not found');
     }
+
+    console.log('Current game state:', { 
+      currentPlayer: game.currentPlayer, 
+      moveCount: game.moves.length,
+      status: game.status 
+    });
 
     if (game.status !== 'active') {
       throw new Error('Game is not active');
@@ -76,6 +84,7 @@ export class AsyncGameManager {
 
     // Verify it's the player's turn
     const playerNum = game.player1Id === userId ? 1 : 2;
+    console.log(`Player ${userId} is player number ${playerNum}`);
     if (game.currentPlayer !== playerNum) {
       throw new Error('Not your turn');
     }
@@ -87,7 +96,10 @@ export class AsyncGameManager {
 
     // Apply move
     game.board[y][x] = playerNum;
-    game.moves.push({ x, y, player: playerNum, timestamp: Date.now() });
+    const moveData = { x, y, player: playerNum, timestamp: Date.now() };
+    game.moves.push(moveData);
+    console.log('Move added to game.moves array:', moveData);
+    console.log('Total moves now:', game.moves.length);
 
     // Calculate captured dots (simplified - you'll need to integrate with boardLogic)
     const capturedDots = this.calculateCapture(game, x, y, playerNum);
@@ -103,6 +115,7 @@ export class AsyncGameManager {
     game.currentPlayer = game.currentPlayer === 1 ? 2 : 1;
     game.lastMoveAt = Date.now();
     game.turnDeadline = Date.now() + game.timeLimit;
+    console.log('Turn switched to player', game.currentPlayer);
 
     // Check if game is over
     if (this.isGameComplete(game)) {

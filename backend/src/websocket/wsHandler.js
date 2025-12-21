@@ -516,8 +516,10 @@ export class WebSocketHandler {
       return;
     }
     
+    console.log(`Syncing move to async storage: gameId=${asyncGameId}, x=${x}, y=${y}, userId=${userId}`);
     try {
-      this.asyncGameManager.makeMove(asyncGameId, userId, x, y);
+      const result = this.asyncGameManager.makeMove(asyncGameId, userId, x, y);
+      console.log('Async sync result:', result);
     } catch (error) {
       console.error('Failed to sync move to async storage:', error);
     }
