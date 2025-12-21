@@ -89,6 +89,11 @@ jobs:
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          
+          # Verify kubectl can connect
+          kubectl cluster-info || { echo "Failed to connect to cluster"; cat ~/.kube/config; exit 1; }
+          kubectl get nodes || { echo "Cannot access cluster nodes"; exit 1; }
 
       - name: Deploy to Kubernetes
         env:
