@@ -47,6 +47,14 @@ export class GameRenderer {
     this.panStart = new THREE.Vector2();
     this.panStartOffset = new THREE.Vector2();
     
+    // Pinch zoom state
+    this.isPinching = false;
+    this.lastPinchDistance = 0;
+    this.pinchCenter = new THREE.Vector2();
+    
+    // Dot selection tolerance (in world units)
+    this.dotSelectionTolerance = 0.3;
+    
     this.init();
   }
 
@@ -168,9 +176,9 @@ export class GameRenderer {
     this.canvas.addEventListener('mouseleave', () => this.handlePanEnd());
     
     // Touch pan controls for mobile
-    this.canvas.addEventListener('touchstart', (e) => this.handleTouchPanStart(e), { passive: false });
-    this.canvas.addEventListener('touchmove', (e) => this.handleTouchPanMove(e), { passive: false });
-    this.canvas.addEventListener('touchend', () => this.handlePanEnd());
+    this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+    this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+    this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
   }
   
   /**
@@ -244,15 +252,14 @@ export class GameRenderer {
   }
   
   /**
-   * Handle touch pan start
+   * Handle touch start - support both pan and pinch zoom
    */
-  handleTouchPanStart(event) {
+  handleTouchStart(event) {
     if (event.touches.length === 1) {
+      // Single touch - check for dot or start panning
       const touch = event.touches[0];
-      
-      // Check if touching on a dot
       this.getMousePosition({ clientX: touch.clientX, clientY: touch.clientY });
-      const dot = this.getDotAtMouse();
+      const dot = this.getNearestDot();
       
       if (!dot || !this.isDotMeshClickable(dot)) {
         event.preventDefault();
@@ -260,31 +267,87 @@ export class GameRenderer {
         this.panStart.set(touch.clientX, touch.clientY);
         this.panStartOffset.copy(this.panOffset);
       }
+    } else if (event.touches.length === 2) {
+      // Two touches - start pinch zoom
+      event.preventDefault();
+      this.isPinching = true;
+      this.isPanning = false;
+      
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      
+      this.lastPinchDistance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      
+      // Store center point for zoom focus
+      this.pinchCenter.set(
+        (touch1.clientX + touch2.clientX) / 2,
+        (touch1.clientY + touch2.clientY) / 2
+      );
     }
   }
   
   /**
-   * Handle touch pan movement
+   * Handle touch move - pan or pinch zoom
    */
-  handleTouchPanMove(event) {
-    if (!this.isPanning || event.touches.length !== 1) return;
-    
-    event.preventDefault();
-    const touch = event.touches[0];
-    
-    const rect = this.canvas.getBoundingClientRect();
-    const aspect = rect.width / rect.height;
-    const frustumSize = GameRenderer.BASE_FRUSTUM_SIZE / this.zoomLevel;
-    
-    const dx = (touch.clientX - this.panStart.x) / rect.width * frustumSize * aspect;
-    const dy = -(touch.clientY - this.panStart.y) / rect.height * frustumSize;
-    
-    this.panOffset.set(
-      this.panStartOffset.x + dx,
-      this.panStartOffset.y + dy
-    );
-    
-    this.updateCameraPosition();
+  handleTouchMove(event) {
+    if (event.touches.length === 1 && this.isPanning) {
+      // Single touch panning
+      event.preventDefault();
+      const touch = event.touches[0];
+      
+      const rect = this.canvas.getBoundingClientRect();
+      const aspect = rect.width / rect.height;
+      const frustumSize = GameRenderer.BASE_FRUSTUM_SIZE / this.zoomLevel;
+      
+      const dx = (touch.clientX - this.panStart.x) / rect.width * frustumSize * aspect;
+      const dy = -(touch.clientY - this.panStart.y) / rect.height * frustumSize;
+      
+      this.panOffset.set(
+        this.panStartOffset.x + dx,
+        this.panStartOffset.y + dy
+      );
+      
+      this.updateCameraPosition();
+    } else if (event.touches.length === 2 && this.isPinching) {
+      // Pinch zoom
+      event.preventDefault();
+      
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      
+      const currentDistance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      
+      // Calculate zoom delta
+      const pinchDelta = currentDistance - this.lastPinchDistance;
+      const zoomDelta = pinchDelta * 0.01; // Sensitivity factor
+      
+      const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoomLevel + zoomDelta));
+      
+      if (newZoom !== this.zoomLevel) {
+        this.zoomLevel = newZoom;
+        this.updateCameraZoom();
+      }
+      
+      this.lastPinchDistance = currentDistance;
+    }
+  }
+  
+  /**
+   * Handle touch end
+   */
+  handleTouchEnd(event) {
+    if (event.touches.length < 2) {
+      this.isPinching = false;
+    }
+    if (event.touches.length === 0) {
+      this.handlePanEnd();
+    }
   }
   
   /**
@@ -967,14 +1030,37 @@ export class GameRenderer {
   }
 
   getDotAtMouse() {
+    // Use getNearestDot for better mobile support
+    return this.getNearestDot();
+  }
+  
+  /**
+   * Get the nearest dot to mouse position with tolerance
+   * Better for mobile devices where precise clicking is difficult
+   */
+  getNearestDot() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const dotArray = Array.from(this.dotMeshes.values());
-    const intersects = this.raycaster.intersectObjects(dotArray);
     
-    if (intersects.length > 0) {
-      return intersects[0].object;
+    // Get the point in 3D space where the ray intersects z=0 plane
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const intersectPoint = new THREE.Vector3();
+    this.raycaster.ray.intersectPlane(plane, intersectPoint);
+    
+    if (!intersectPoint) return null;
+    
+    // Find the nearest dot within tolerance
+    let nearestDot = null;
+    let nearestDistance = this.dotSelectionTolerance;
+    
+    for (const [key, mesh] of this.dotMeshes) {
+      const distance = intersectPoint.distanceTo(mesh.position);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestDot = mesh;
+      }
     }
-    return null;
+    
+    return nearestDot;
   }
 
   /**
