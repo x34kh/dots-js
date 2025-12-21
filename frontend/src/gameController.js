@@ -1224,7 +1224,10 @@ export class GameController {
   }
 
   receiveMove(data) {
-    const { x, y, playerNum } = data;
+    const { move, playerNum, captures } = data;
+    const { x, y } = move;
+    
+    console.log('Received opponent move:', { x, y, playerNum, captures });
     
     // Apply move to board logic
     const result = this.boardLogic.occupyDot(x, y, playerNum);
@@ -1248,10 +1251,15 @@ export class GameController {
       // Switch turns
       this.stateMachine.switchTurn();
       
+      // Update UI
+      this.updatePlayerCards();
+      
       // Check game over
       if (this.boardLogic.isGameOver()) {
         this.endGame();
       }
+    } else {
+      console.error('Failed to apply opponent move:', result.error);
     }
   }
 
