@@ -147,6 +147,11 @@ export class GameController {
       this.forfeitGame();
     });
 
+    // Back to Lobby button
+    document.getElementById('btn-back-to-lobby').addEventListener('click', () => {
+      this.returnToLobby();
+    });
+
     // Skins button
     document.getElementById('btn-skins').addEventListener('click', () => {
       this.showSkinSelector();
@@ -824,6 +829,9 @@ export class GameController {
     // Show forfeit button
     document.getElementById('btn-forfeit').classList.remove('hidden');
     
+    // Hide back to lobby button for real-time games
+    document.getElementById('btn-back-to-lobby').classList.add('hidden');
+    
     console.log('Resetting board and renderer...');
     // Reset board and scores
     this.boardLogic.reset();
@@ -920,8 +928,39 @@ export class GameController {
     this.renderer.updateSkinColors();
     this.updatePlayerCards();
     
+    // Show Back to Lobby button for async games
+    if (this.stateMachine.mode === GameMode.ASYNC) {
+      document.getElementById('btn-back-to-lobby').classList.remove('hidden');
+    }
+    
     notificationManager.show('Game resumed!', 'success');
     console.log('Game resumed successfully');
+  }
+
+  returnToLobby() {
+    // Return to lobby without forfeiting the game
+    // Only works for async games
+    if (this.stateMachine.mode !== GameMode.ASYNC) {
+      console.log('Can only return to lobby from async games');
+      return;
+    }
+    
+    console.log('Returning to lobby, game will be preserved');
+    
+    // Reset game started flag
+    this.gameStarted = false;
+    
+    // Hide game UI
+    document.getElementById('game-container').style.display = 'none';
+    document.getElementById('btn-forfeit').classList.add('hidden');
+    document.getElementById('btn-back-to-lobby').classList.add('hidden');
+    
+    // Show lobby
+    if (this.lobby) {
+      this.lobby.show();
+    }
+    
+    notificationManager.show('Game saved - you can continue later from Current Games', 'success');
   }
 
   forfeitGame() {

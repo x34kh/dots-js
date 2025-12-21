@@ -134,7 +134,7 @@ body {
   position: fixed;
   bottom: 30px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% - 100px));
   padding: 12px 30px;
   font-size: 14px;
   font-weight: bold;
@@ -152,7 +152,33 @@ body {
 #btn-forfeit:hover {
   background: rgba(255, 102, 102, 0.2);
   box-shadow: 0 0 15px rgba(255, 102, 102, 0.4);
-  transform: translateX(-50%) translateY(-2px);
+  transform: translateX(calc(-50% - 100px)) translateY(-2px);
+}
+
+/* Back to Lobby Button */
+#btn-back-to-lobby {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(calc(-50% + 100px));
+  padding: 12px 30px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #66ccff;
+  background: rgba(20, 20, 35, 0.9);
+  border: 2px solid #66ccff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  pointer-events: auto;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+#btn-back-to-lobby:hover {
+  background: rgba(102, 204, 255, 0.2);
+  box-shadow: 0 0 15px rgba(102, 204, 255, 0.4);
+  transform: translateX(calc(-50% + 100px)) translateY(-2px);
 }
 
 #capture-notification {
@@ -746,6 +772,21 @@ body {
   /* Move forfeit button higher to avoid overlap with player cards */
   #btn-forfeit {
     bottom: 100px;
+    transform: translateX(calc(-50% - 100px));
+  }
+  
+  #btn-forfeit:hover {
+    transform: translateX(calc(-50% - 100px)) translateY(-2px);
+  }
+  
+  /* Move back to lobby button higher to avoid overlap with player cards */
+  #btn-back-to-lobby {
+    bottom: 100px;
+    transform: translateX(calc(-50% + 100px));
+  }
+  
+  #btn-back-to-lobby:hover {
+    transform: translateX(calc(-50% + 100px)) translateY(-2px);
   }
 
   /* Adjust confirm button position */
