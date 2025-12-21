@@ -180,6 +180,92 @@ body {
   100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
 }
 
+/* Notification System */
+#notification-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.notification {
+  background: rgba(20, 20, 35, 0.95);
+  border: 2px solid rgba(0, 255, 255, 0.5);
+  border-radius: 10px;
+  padding: 15px 20px;
+  min-width: 300px;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  animation: slideIn 0.3s ease-out;
+}
+
+.notification.success {
+  border-color: rgba(0, 255, 128, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 255, 128, 0.3);
+}
+
+.notification.error {
+  border-color: rgba(255, 0, 128, 0.5);
+  box-shadow: 0 4px 20px rgba(255, 0, 128, 0.3);
+}
+
+.notification.info {
+  border-color: rgba(128, 128, 255, 0.5);
+  box-shadow: 0 4px 20px rgba(128, 128, 255, 0.3);
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.notification-title {
+  color: #00ffff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.notification-time {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+}
+
+.notification-message {
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.notification.fadeOut {
+  animation: slideOut 0.3s ease-in forwards;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  to {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+}
+
 #game-menu {
   position: absolute;
   top: 50%;

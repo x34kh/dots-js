@@ -10,6 +10,7 @@ import { P2PNetwork, URLSignaling } from './p2p.js';
 import { WebSocketClient } from './websocket.js';
 import { GoogleAuth } from './auth.js';
 import { skinManager, SKINS } from './skins.js';
+import { notificationManager } from './notifications.js';
 
 export class GameController {
   constructor(config = {}) {
@@ -384,14 +385,17 @@ export class GameController {
   }
 
   async startDemoGame() {
+    notificationManager.show('Initializing P2P game...', 'info');
     this.stateMachine.setMode(GameMode.DEMO);
     
     // Create guest user if not signed in
     if (!this.auth.isSignedIn()) {
+      notificationManager.show('Creating guest user...', 'info');
       this.auth.createGuestUser();
     }
     
     // Set local player as player 1 FIRST
+    notificationManager.show('Setting up Player 1...', 'info');
     this.stateMachine.localPlayerId = 1;
     this.stateMachine.setPlayer(1, {
       id: this.auth.getUser().id,
@@ -401,17 +405,21 @@ export class GameController {
     skinManager.setPlayerSkin(1, skinManager.currentSkin);
     
     // Initialize P2P
+    notificationManager.show('Initializing P2P connection...', 'info');
     this.p2p = new P2PNetwork();
     this.setupP2PEvents();
     
     try {
       // Create game and get link
+      notificationManager.show('Creating WebRTC offer...', 'info');
       const { gameId, link } = await this.p2p.createGame();
       this.stateMachine.gameId = gameId;
       
       console.log('Game created with ID:', gameId);
       console.log('Share link:', link);
       console.log('Link length:', link.length);
+      
+      notificationManager.show(`Game created! ID: ${gameId}`, 'success');
       
       // Update browser URL to the shareable link
       window.history.pushState({}, '', link);
@@ -422,6 +430,7 @@ export class GameController {
       
       // Wait for opponent
       this.stateMachine.setState(GameState.WAITING);
+      notificationManager.show('Waiting for opponent to join...', 'info', 10000);
       console.log('Waiting for opponent to join...');
       
       // Start polling for answer
@@ -438,14 +447,17 @@ export class GameController {
   }
 
   async joinDemoGame(gameId) {
+    notificationManager.show(`Joining game ${gameId}...`, 'info');
     this.stateMachine.setMode(GameMode.DEMO);
     
     // Create guest user if not signed in
     if (!this.auth.isSignedIn()) {
+      notificationManager.show('Creating guest user...', 'info');
       this.auth.createGuestUser();
     }
     
     // Set local player as player 2 FIRST
+    notificationManager.show('Setting up Player 2...', 'info');
     this.stateMachine.localPlayerId = 2;
     this.stateMachine.setPlayer(2, {
       id: this.auth.getUser().id,
@@ -455,12 +467,15 @@ export class GameController {
     skinManager.setPlayerSkin(2, skinManager.currentSkin);
     
     // Initialize P2P
+    notificationManager.show('Initializing P2P connection...', 'info');
     this.p2p = new P2PNetwork();
     this.setupP2PEvents();
     
     try {
       // Join the game
+      notificationManager.show('Fetching game offer...', 'info');
       await this.p2p.joinGame(gameId);
+      notificationManager.show('Joined successfully! Connecting...', 'success');
       
     } catch (error) {
       console.error('Failed to join demo game:', error);
@@ -507,10 +522,12 @@ export class GameController {
   setupP2PEvents() {
     this.p2p.on('connected', () => {
       console.log('P2P connected');
+      notificationManager.show('P2P connection established', 'success');
     });
 
     this.p2p.on('ready', () => {
       console.log('P2P ready');
+      notificationManager.show('Connection ready, syncing player info...', 'info');
       // Send player info with skin
       const playerNum = this.stateMachine.localPlayerId;
       const playerInfo = this.stateMachine.getPlayer(playerNum);
@@ -523,14 +540,17 @@ export class GameController {
           skin: playerInfo.skin || skinManager.currentSkin,
           playerNum: playerNum
         });
+        notificationManager.show('Player info sent', 'success');
       } else {
         console.warn('Player info not set yet when P2P ready fired');
+        notificationManager.show('Warning: Player info not ready', 'error');
       }
       
       // Don't start game yet - wait for player info exchange
     });
 
     this.p2p.on('player', (data) => {
+      notificationManager.show(`Received opponent info: ${data.name}`, 'success');
       const opponentId = this.stateMachine.localPlayerId === 1 ? 2 : 1;
       this.stateMachine.setPlayer(opponentId, {
         id: data.playerId,
@@ -545,6 +565,7 @@ export class GameController {
       }
       
       // Both players connected - start the game
+      notificationManager.show('Both players ready! Starting game...', 'success');
       this.startGame();
     });
 
