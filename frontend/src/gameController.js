@@ -744,6 +744,11 @@ export class GameController {
       
       this.startGame();
     });
+    
+    this.wsClient.on('resumeGame', async (data) => {
+      // Resume a saved game from async storage
+      await this.resumeSavedGame(data.gameId, data.gameState);
+    });
 
     this.wsClient.on('moveResult', (data) => {
       if (data.success) {
@@ -839,6 +844,84 @@ export class GameController {
     console.log('startGame() completed');
     console.log('Final localPlayerId:', this.stateMachine.localPlayerId);
     console.log('Final currentPlayer:', this.stateMachine.currentPlayer);
+  }
+
+  async resumeSavedGame(gameId, gameState) {
+    console.log('Resuming saved game:', gameId, gameState);
+    
+    // Prevent multiple calls
+    if (this.gameStarted) {
+      console.log('Game already started, ignoring resume');
+      return;
+    }
+    this.gameStarted = true;
+    
+    // Hide lobby, show game
+    if (this.lobby) {
+      this.lobby.hide();
+    }
+    document.getElementById('game-container').style.display = 'block';
+    document.getElementById('game-menu').classList.add('hidden');
+    document.getElementById('share-link-container').classList.add('hidden');
+    document.getElementById('btn-forfeit').classList.remove('hidden');
+    
+    // Set up game state
+    this.stateMachine.setState(GameState.PLAYING);
+    this.stateMachine.mode = GameMode.ASYNC; // Use async mode for continued games
+    this.stateMachine.gameId = gameId;
+    
+    // Determine which player we are
+    const userId = this.auth.user?.sub || this.auth.user?.id;
+    this.stateMachine.localPlayerId = (gameState.player1 === userId) ? 1 : 2;
+    
+    // Set player info
+    this.stateMachine.setPlayer(1, { 
+      id: gameState.player1, 
+      name: gameState.player1Name || 'Player 1',
+      score: 0
+    });
+    this.stateMachine.setPlayer(2, { 
+      id: gameState.player2, 
+      name: gameState.player2Name || 'Player 2',
+      score: 0
+    });
+    
+    // Restore board state
+    this.boardLogic.reset();
+    this.renderer.reset();
+    
+    let player1Score = 0;
+    let player2Score = 0;
+    
+    // Replay all moves to restore the board
+    for (const move of gameState.moves) {
+      const result = this.boardLogic.placeDot(move.x, move.y, move.player);
+      if (result.valid) {
+        this.renderer.addDot(move.x, move.y, move.player);
+        
+        if (result.captures && result.captures.length > 0) {
+          for (const capture of result.captures) {
+            this.renderer.addSquare(capture.x, capture.y, move.player);
+            if (move.player === 1) player1Score++;
+            else player2Score++;
+          }
+        }
+      }
+    }
+    
+    // Update scores
+    this.stateMachine.players[1].score = player1Score;
+    this.stateMachine.players[2].score = player2Score;
+    
+    // Set current player
+    this.stateMachine.setCurrentPlayer(gameState.currentPlayer);
+    
+    // Update UI
+    this.renderer.updateSkinColors();
+    this.updatePlayerCards();
+    
+    notificationManager.show('Game resumed!', 'success');
+    console.log('Game resumed successfully');
   }
 
   forfeitGame() {
@@ -1000,7 +1083,7 @@ export class GameController {
     this.makeMove(gridX, gridY);
   }
 
-  makeMove(x, y) {
+  async makeMove(x, y) {
     const playerNum = this.stateMachine.currentPlayer;
     
     // Occupy the dot
@@ -1026,6 +1109,9 @@ export class GameController {
         notificationManager.show('Connection lost - move will be sent when reconnected', 'info');
       }
       this.wsClient.submitMove(x, y); // Send dot coordinates for new game format
+    } else if (this.stateMachine.mode === GameMode.ASYNC) {
+      // Send move to async API
+      await this.submitAsyncMove(x, y);
     }
     
     // Handle scoring
@@ -1061,6 +1147,33 @@ export class GameController {
     // Mark captured dots
     if (capturedDots.length > 0) {
       this.renderer.setCapturedDots(capturedDots, playerNum);
+    }
+  }
+  
+  async submitAsyncMove(x, y) {
+    const apiUrl = this.config.serverUrl || window.location.origin;
+    const userId = this.auth.user?.sub || this.auth.user?.id;
+    const gameId = this.stateMachine.gameId;
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/async/games/${gameId}/move`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userId, x, y })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Failed to submit async move:', error);
+        notificationManager.show('Failed to submit move', 'error');
+      } else {
+        console.log('Async move submitted successfully');
+      }
+    } catch (error) {
+      console.error('Error submitting async move:', error);
+      notificationManager.show('Error submitting move', 'error');
     }
   }
 

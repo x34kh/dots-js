@@ -13,7 +13,8 @@ export const GameState = {
 export const GameMode = {
   DEMO: 'demo',
   ONLINE: 'online',
-  LOCAL: 'local'
+  LOCAL: 'local',
+  ASYNC: 'async'
 };
 
 export class StateMachine {

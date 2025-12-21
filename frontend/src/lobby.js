@@ -377,14 +377,32 @@ export class LobbyUI {
     });
   }
 
-  continueGame(gameId) {
+  async continueGame(gameId) {
     console.log('Continue game:', gameId);
-    // TODO: Implement game continuation
-    // This will need to:
-    // 1. Load the full game state from server
-    // 2. Exit lobby
-    // 3. Initialize game board with saved state
-    // 4. Enable async mode for the game controller
+    
+    const apiUrl = this.getApiUrl();
+    const userId = this.authState.userId;
+    
+    try {
+      // Load full game state
+      const response = await fetch(`${apiUrl}/api/async/games/${gameId}?userId=${userId}`);
+      if (!response.ok) {
+        console.error('Failed to load game:', await response.text());
+        return;
+      }
+      
+      const gameState = await response.json();
+      
+      // Emit event for game controller to handle
+      if (this.wsClient) {
+        this.wsClient.emit('resumeGame', {
+          gameId,
+          gameState
+        });
+      }
+    } catch (error) {
+      console.error('Error continuing game:', error);
+    }
   }
 
   updateQueueStats() {
