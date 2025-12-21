@@ -911,8 +911,11 @@ export class GameController {
     
     // Replay all moves to restore the board
     console.log('Replaying', gameState.moves.length, 'moves');
+    console.log('Moves array:', JSON.stringify(gameState.moves));
     for (const move of gameState.moves) {
+      console.log('Replaying move:', move);
       const result = this.boardLogic.placeDot(move.x, move.y, move.player);
+      console.log('placeDot result:', result);
       if (result.valid) {
         this.renderer.addDot(move.x, move.y, move.player);
         
@@ -923,6 +926,8 @@ export class GameController {
             else player2Score++;
           }
         }
+      } else {
+        console.error('Failed to replay move:', move, result);
       }
     }
     
