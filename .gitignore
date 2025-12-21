@@ -11,10 +11,6 @@ build/
 .env.local
 .env.*.local
 
-# Configuration files with secrets
-frontend/public/config.js
-config.js
-
 # IDE
 .vscode/
 .idea/
