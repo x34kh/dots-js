@@ -669,7 +669,7 @@ export class GameController {
         userId: userId,
         name: this.auth.user?.name || this.auth.getAnonymousAuthData()?.username,
         picture: this.auth.user?.picture || null
-      });
+      }, this.config.serverUrl);
     }
     
     // Hide menu and game container

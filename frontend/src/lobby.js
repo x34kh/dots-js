@@ -4,13 +4,33 @@
  */
 
 export class LobbyUI {
-  constructor(websocket, authState) {
+  constructor(websocket, authState, serverUrl) {
     this.websocket = websocket;
     this.authState = authState;
+    this.serverUrl = serverUrl;
     this.profileData = null;
     this.queueStats = null;
     this.inQueue = false;
     this.currentQueueType = null;
+  }
+  
+  getApiUrl() {
+    // Convert WebSocket URL to HTTP URL if needed
+    if (this.serverUrl) {
+      // If serverUrl is ws:// or wss://, convert to http:// or https://
+      if (this.serverUrl.startsWith('ws://')) {
+        return this.serverUrl.replace('ws://', 'http://').replace(/\/ws$/, '');
+      } else if (this.serverUrl.startsWith('wss://')) {
+        return this.serverUrl.replace('wss://', 'https://').replace(/\/ws$/, '');
+      } else if (this.serverUrl.startsWith('http')) {
+        return this.serverUrl.replace(/\/ws$/, '');
+      }
+    }
+    
+    // Fallback to config or localhost
+    return window.GAME_CONFIG?.backendUrl || 
+           import.meta.env.VITE_BACKEND_URL || 
+           'http://localhost:3001';
   }
 
   async show() {
@@ -47,12 +67,10 @@ export class LobbyUI {
       return;
     }
     
-    const apiUrl = window.GAME_CONFIG?.backendUrl || 
-                   import.meta.env.VITE_BACKEND_URL || 
-                   'http://localhost:3001';
+    const apiUrl = this.getApiUrl();
     
     try {
-      console.log('Loading profile for user:', userId);
+      console.log('Loading profile for user:', userId, 'from:', apiUrl);
       const response = await fetch(`${apiUrl}/api/profile/${userId}`);
       if (response.ok) {
         this.profileData = await response.json();
@@ -84,9 +102,7 @@ export class LobbyUI {
 
   requestQueueStats() {
     // Stats will be broadcasted by server, but we can also poll
-    const apiUrl = window.GAME_CONFIG?.backendUrl || 
-                   import.meta.env.VITE_BACKEND_URL || 
-                   'http://localhost:3001';
+    const apiUrl = this.getApiUrl();
     
     fetch(`${apiUrl}/api/stats/online`)
       .then(res => res.json())
