@@ -314,10 +314,14 @@ export class GameController {
   }
 
   checkJoinParams() {
-    const { gameId, offer } = URLSignaling.getJoinParams();
-    if (gameId && offer) {
-      this.joinDemoGame(offer);
-      URLSignaling.clearParams();
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameId = urlParams.get('join');
+    
+    if (gameId) {
+      // Clear the URL parameters
+      window.history.replaceState({}, '', window.location.pathname);
+      // Join the game
+      this.joinDemoGame(gameId);
     }
   }
 
@@ -360,6 +364,10 @@ export class GameController {
       const { gameId, link } = await this.p2p.createGame();
       this.stateMachine.gameId = gameId;
       
+      console.log('Game created with ID:', gameId);
+      console.log('Share link:', link);
+      console.log('Link length:', link.length);
+      
       // Update browser URL to the shareable link
       window.history.pushState({}, '', link);
       
@@ -376,14 +384,22 @@ export class GameController {
       
       // Wait for opponent
       this.stateMachine.setState(GameState.WAITING);
+      console.log('Waiting for opponent to join...');
+      
+      // Start polling for answer
+      this.p2p.completeConnection().catch(error => {
+        console.error('Failed to complete connection:', error);
+        alert('Timed out waiting for opponent');
+        this.returnToMenu();
+      });
       
     } catch (error) {
       console.error('Failed to create demo game:', error);
-      alert('Failed to create game. Please try again.');
+      alert('Failed to create game. Error: ' + error.message);
     }
   }
 
-  async joinDemoGame(offerString) {
+  async joinDemoGame(gameId) {
     this.stateMachine.setMode(GameMode.DEMO);
     
     // Create guest user if not signed in
@@ -397,10 +413,20 @@ export class GameController {
     
     try {
       // Join the game
-      const answer = await this.p2p.joinGame(offerString);
+      await this.p2p.joinGame(gameId);
       
       // Set local player as player 2
       this.stateMachine.localPlayerId = 2;
+      this.stateMachine.setPlayer(2, {
+        id: this.auth.getUser().id,
+        name: this.auth.getUser().name
+      });
+      
+    } catch (error) {
+      console.error('Failed to join demo game:', error);
+      alert('Failed to join game. The link may be invalid or expired.');
+    }
+  }
       this.stateMachine.setPlayer(2, {
         id: this.auth.getUser().id,
         name: this.auth.getUser().name

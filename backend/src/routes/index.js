@@ -4,6 +4,7 @@
 
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import p2pStore from '../p2p/p2pStore.js';
 
 // Rate limiter for authentication endpoints
 const authLimiter = rateLimit({
@@ -117,6 +118,78 @@ export function createRouter(authService, gameManager, eloService) {
     const limit = parseInt(req.query.limit) || 20;
     const matches = eloService.getMatchHistory(req.params.userId, limit);
     res.json(matches);
+  });
+
+  // P2P routes for WebRTC signaling
+  router.post('/p2p/offer', (req, res) => {
+    try {
+      const { offer } = req.body;
+      if (!offer) {
+        return res.status(400).json({ error: 'Offer is required' });
+      }
+      
+      const gameId = p2pStore.generateGameId();
+      p2pStore.storeOffer(gameId, offer);
+      
+      res.json({ gameId });
+    } catch (error) {
+      console.error('Failed to store offer:', error);
+      res.status(500).json({ error: 'Failed to store offer' });
+    }
+  });
+
+  router.get('/p2p/offer/:gameId', (req, res) => {
+    try {
+      const { gameId } = req.params;
+      const offer = p2pStore.getOffer(gameId);
+      
+      if (!offer) {
+        return res.status(404).json({ error: 'Game not found' });
+      }
+      
+      res.json({ offer });
+    } catch (error) {
+      console.error('Failed to retrieve offer:', error);
+      res.status(500).json({ error: 'Failed to retrieve offer' });
+    }
+  });
+
+  router.post('/p2p/answer/:gameId', (req, res) => {
+    try {
+      const { gameId } = req.params;
+      const { answer } = req.body;
+      
+      if (!answer) {
+        return res.status(400).json({ error: 'Answer is required' });
+      }
+      
+      const offer = p2pStore.getOffer(gameId);
+      if (!offer) {
+        return res.status(404).json({ error: 'Game not found' });
+      }
+      
+      p2pStore.storeAnswer(gameId, answer);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to store answer:', error);
+      res.status(500).json({ error: 'Failed to store answer' });
+    }
+  });
+
+  router.get('/p2p/answer/:gameId', (req, res) => {
+    try {
+      const { gameId } = req.params;
+      const answer = p2pStore.getAnswer(gameId);
+      
+      if (!answer) {
+        return res.status(404).json({ error: 'Answer not found yet' });
+      }
+      
+      res.json({ answer });
+    } catch (error) {
+      console.error('Failed to retrieve answer:', error);
+      res.status(500).json({ error: 'Failed to retrieve answer' });
+    }
   });
 
   // Health check

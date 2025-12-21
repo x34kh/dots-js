@@ -4,12 +4,13 @@
  */
 
 export class P2PNetwork {
-  constructor() {
+  constructor(serverUrl = null) {
     this.peer = null;
     this.connection = null;
     this.isHost = false;
     this.gameId = null;
     this.listeners = new Map();
+    this.serverUrl = serverUrl || `${window.location.protocol}//${window.location.host}/api`;
     this.iceServers = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' }
@@ -34,7 +35,8 @@ export class P2PNetwork {
    * Generate a unique game ID
    */
   generateGameId() {
-    return 'g-' + Math.random().toString(36).slice(2, 11);
+    // No longer used - server generates IDs
+    return null;
   }
 
   /**
@@ -42,7 +44,6 @@ export class P2PNetwork {
    */
   async createGame() {
     this.isHost = true;
-    this.gameId = this.generateGameId();
     
     try {
       this.peer = new RTCPeerConnection({ iceServers: this.iceServers });
@@ -61,13 +62,25 @@ export class P2PNetwork {
       // Wait for ICE gathering
       await this.waitForIceGathering();
       
-      // Return the game link with the offer encoded
+      // Store offer on server and get short game ID
       const offerData = JSON.stringify(this.peer.localDescription);
-      const encoded = btoa(offerData);
+      const response = await fetch(`${this.serverUrl}/p2p/offer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ offer: offerData })
+      });
       
+      if (!response.ok) {
+        throw new Error('Failed to store offer on server');
+      }
+      
+      const { gameId } = await response.json();
+      this.gameId = gameId;
+      
+      // Return short link with just the game ID
       return {
-        gameId: this.gameId,
-        link: `${window.location.origin}${window.location.pathname}?join=${this.gameId}&offer=${encoded}`
+        gameId: gameId,
+        link: `${window.location.origin}${window.location.pathname}?join=${gameId}`
       };
     } catch (error) {
       console.error('Failed to create game:', error);
@@ -78,10 +91,19 @@ export class P2PNetwork {
   /**
    * Join an existing game
    */
-  async joinGame(offerString) {
+  async joinGame(gameId) {
     this.isHost = false;
+    this.gameId = gameId;
     
     try {
+      // Fetch offer from server
+      const response = await fetch(`${this.serverUrl}/p2p/offer/${gameId}`);
+      if (!response.ok) {
+        throw new Error('Game not found');
+      }
+      
+      const { offer } = await response.json();
+      
       this.peer = new RTCPeerConnection({ iceServers: this.iceServers });
       this.setupPeerEvents();
       
@@ -92,8 +114,8 @@ export class P2PNetwork {
       };
       
       // Set remote description (the offer)
-      const offer = JSON.parse(atob(offerString));
-      await this.peer.setRemoteDescription(new RTCSessionDescription(offer));
+      const offerDesc = JSON.parse(offer);
+      await this.peer.setRemoteDescription(new RTCSessionDescription(offerDesc));
       
       // Create answer
       const answer = await this.peer.createAnswer();
@@ -102,9 +124,19 @@ export class P2PNetwork {
       // Wait for ICE gathering
       await this.waitForIceGathering();
       
-      // Return the answer to be shared back
+      // Send answer to server
       const answerData = JSON.stringify(this.peer.localDescription);
-      return btoa(answerData);
+      const answerResponse = await fetch(`${this.serverUrl}/p2p/answer/${gameId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer: answerData })
+      });
+      
+      if (!answerResponse.ok) {
+        throw new Error('Failed to send answer');
+      }
+      
+      return true;
     } catch (error) {
       console.error('Failed to join game:', error);
       throw error;
@@ -114,10 +146,25 @@ export class P2PNetwork {
   /**
    * Complete the connection as host (receive answer)
    */
-  async completeConnection(answerString) {
+  async completeConnection() {
     try {
-      const answer = JSON.parse(atob(answerString));
-      await this.peer.setRemoteDescription(new RTCSessionDescription(answer));
+      // Poll for answer from server
+      const maxAttempts = 60; // 60 seconds
+      for (let i = 0; i < maxAttempts; i++) {
+        const response = await fetch(`${this.serverUrl}/p2p/answer/${this.gameId}`);
+        
+        if (response.ok) {
+          const { answer } = await response.json();
+          const answerDesc = JSON.parse(answer);
+          await this.peer.setRemoteDescription(new RTCSessionDescription(answerDesc));
+          return true;
+        }
+        
+        // Wait 1 second before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      throw new Error('Timeout waiting for answer');
     } catch (error) {
       console.error('Failed to complete connection:', error);
       throw error;
@@ -177,6 +224,10 @@ export class P2PNetwork {
     this.dataChannel.onclose = () => {
       console.log('Data channel closed');
       this.emit('disconnected');
+    };
+
+    this.dataChannel.onerror = (error) => {
+      console.error('Data channel error:', error);
     };
 
     this.dataChannel.onmessage = (event) => {
