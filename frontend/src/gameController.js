@@ -33,6 +33,8 @@ export class GameController {
     this.pendingGameMode = null; // Store the selected game mode before grid size selection
     this.gameStarted = false; // Flag to prevent multiple startGame() calls
     this.autoShowLobbyOnLoad = false; // Flag to show lobby after initial auth
+    this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    this.pendingMove = null; // Store pending move for touch confirm
 
     this.init();
   }
@@ -145,6 +147,14 @@ export class GameController {
     document.getElementById('btn-skins').addEventListener('click', () => {
       this.showSkinSelector();
     });
+
+    // Confirm move button (for touch devices)
+    const confirmBtn = document.getElementById('btn-confirm-move');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', () => {
+        this.confirmPendingMove();
+      });
+    }
   }
 
   setupGridSizeSelector() {
@@ -362,9 +372,15 @@ export class GameController {
 
     // Touch events
     this.canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      const touch = e.touches[0];
-      this.handleClick({ clientX: touch.clientX, clientY: touch.clientY });
+      if (this.isTouchDevice) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        this.handleTouchStart({ clientX: touch.clientX, clientY: touch.clientY });
+      } else {
+        e.preventDefault();
+        const touch = e.touches[0];
+        this.handleClick({ clientX: touch.clientX, clientY: touch.clientY });
+      }
     });
   }
 
@@ -873,6 +889,69 @@ export class GameController {
     }
   }
 
+  handleTouchStart(event) {
+    if (this.stateMachine.state !== GameState.PLAYING) return;
+    if (!this.stateMachine.isLocalPlayerTurn()) return;
+    
+    this.renderer.getMousePosition(event);
+    const dot = this.renderer.getDotAtMouse();
+    const playerNum = this.stateMachine.currentPlayer;
+    
+    if (dot && this.renderer.isDotMeshClickable(dot)) {
+      const { gridX, gridY } = dot.userData;
+      
+      // Clear previous preview
+      this.renderer.clearPreviews();
+      if (this.renderer.hoverDot) {
+        const prevData = this.renderer.hoverDot.userData;
+        this.renderer.setDotHoverTarget(prevData.gridX, prevData.gridY, false);
+      }
+      
+      // Show hover effect like mouse (magnify dot)
+      this.renderer.setDotHoverTarget(gridX, gridY, true, playerNum);
+      
+      // Preview territory capture
+      const previewDots = this.boardLogic.previewCapture(gridX, gridY, playerNum);
+      if (previewDots.length > 0) {
+        this.renderer.showCapturePreview(previewDots, playerNum);
+      }
+      
+      this.renderer.hoverDot = dot;
+      
+      // Store pending move and enable confirm button
+      this.pendingMove = { gridX, gridY, playerNum };
+      const confirmBtn = document.getElementById('btn-confirm-move');
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.style.opacity = '1';
+      }
+    }
+  }
+
+  confirmPendingMove() {
+    if (!this.pendingMove) return;
+    
+    const { gridX, gridY, playerNum } = this.pendingMove;
+    
+    // Execute the move
+    this.makeMove(gridX, gridY, playerNum);
+    
+    // Clear pending move and disable button
+    this.pendingMove = null;
+    this.renderer.clearPreviews();
+    if (this.renderer.hoverDot) {
+      const prevData = this.renderer.hoverDot.userData;
+      this.renderer.setDotHoverTarget(prevData.gridX, prevData.gridY, false);
+      this.renderer.hoverDot = null;
+    }
+    
+    const confirmBtn = document.getElementById('btn-confirm-move');
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.style.opacity = '0.4';
+    }
+  }
+
   handleClick(event) {
     console.log('Click detected!');
     console.log('State:', this.stateMachine.state);
@@ -1117,19 +1196,33 @@ export class GameController {
   }
 
   updateUIForState(state) {
+    const confirmBtn = document.getElementById('btn-confirm-move');
+    const forfeitBtn = document.getElementById('btn-forfeit');
+    
     switch (state) {
       case GameState.MENU:
         document.getElementById('game-menu').classList.remove('hidden');
         document.getElementById('game-over').classList.add('hidden');
+        if (confirmBtn) confirmBtn.classList.add('hidden');
+        if (forfeitBtn) forfeitBtn.classList.add('hidden');
         break;
       case GameState.WAITING:
         // Show waiting indicator
+        if (confirmBtn) confirmBtn.classList.add('hidden');
         break;
       case GameState.PLAYING:
         document.getElementById('game-menu').classList.add('hidden');
+        if (forfeitBtn) forfeitBtn.classList.remove('hidden');
+        // Show confirm button only on touch devices
+        if (confirmBtn && this.isTouchDevice) {
+          confirmBtn.classList.remove('hidden');
+          confirmBtn.disabled = true;
+        }
         break;
       case GameState.GAME_OVER:
         document.getElementById('game-over').classList.remove('hidden');
+        if (confirmBtn) confirmBtn.classList.add('hidden');
+        if (forfeitBtn) forfeitBtn.classList.add('hidden');
         break;
     }
   }
@@ -1162,6 +1255,7 @@ export class GameController {
     const p1Card = document.getElementById('player1-card');
     const p2Card = document.getElementById('player2-card');
     const indicator = document.getElementById('turn-indicator');
+    const confirmBtn = document.getElementById('btn-confirm-move');
     
     if (playerNum === 1) {
       p1Card.classList.add('active');
@@ -1173,6 +1267,20 @@ export class GameController {
     
     const isLocal = this.stateMachine.isLocalPlayerTurn();
     indicator.textContent = isLocal ? 'Your Turn' : 'Opponent\'s Turn';
+    
+    // Clear pending move when turn changes
+    if (!isLocal && this.pendingMove) {
+      this.pendingMove = null;
+      this.renderer.clearPreviews();
+      if (this.renderer.hoverDot) {
+        const prevData = this.renderer.hoverDot.userData;
+        this.renderer.setDotHoverTarget(prevData.gridX, prevData.gridY, false);
+        this.renderer.hoverDot = null;
+      }
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+      }
+    }
   }
 
   updateScoreDisplay(playerNum, score) {
