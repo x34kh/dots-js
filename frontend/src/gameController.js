@@ -781,6 +781,12 @@ export class GameController {
     this.wsClient.on('connected', () => {
       faviconStatus.setConnected();
     });
+    
+    this.wsClient.on('messagesFlushed', (data) => {
+      if (data.count > 0) {
+        notificationManager.show(`Reconnected - ${data.count} move${data.count > 1 ? 's' : ''} synchronized`, 'success');
+      }
+    });
   }
 
   startGame() {
@@ -1015,6 +1021,10 @@ export class GameController {
     if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
       this.p2p.sendMove({ x, y, playerNum });
     } else if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
+      // Check if WebSocket is connected
+      if (!this.wsClient.isConnected()) {
+        notificationManager.show('Connection lost - move will be sent when reconnected', 'info');
+      }
       this.wsClient.submitMove(x, y); // Send dot coordinates for new game format
     }
     

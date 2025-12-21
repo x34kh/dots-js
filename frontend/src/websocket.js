@@ -13,6 +13,8 @@ export class WebSocketClient {
     this.listeners = new Map();
     this.gameId = null;
     this.authToken = null;
+    this.pendingMessages = []; // Queue for messages sent while disconnected
+    this.maxPendingMessages = 50;
   }
 
   getDefaultServerUrl() {
@@ -165,6 +167,8 @@ export class WebSocketClient {
     switch (message.type) {
       case 'auth_success':
         this.emit('authenticated', message.data);
+        // Flush any pending messages after successful auth
+        this.flushPendingMessages();
         break;
       case 'auth_error':
         this.emit('authError', message.error);
@@ -219,7 +223,69 @@ export class WebSocketClient {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(message));
     } else {
-      console.warn('WebSocket not connected');
+      // Queue important messages for retry on reconnect (except auth messages)
+      if (message.type !== 'auth' && message.type !== 'auth_anonymous') {
+        console.warn('WebSocket not connected, queueing message:', message.type);
+        this.queueMessage(message);
+      } else {
+        console.warn('WebSocket not connected, cannot send:', message.type);
+      }
+    }
+  }
+
+  /**
+   * Queue a message to be sent when connection is restored
+   */
+  queueMessage(message) {
+    // Don't queue duplicates of the same move
+    const isDuplicate = this.pendingMessages.some(m => 
+      m.type === message.type && 
+      m.gameId === message.gameId &&
+      JSON.stringify(m.move) === JSON.stringify(message.move)
+    );
+    
+    if (!isDuplicate) {
+      // Add timestamp to track age
+      message._queuedAt = Date.now();
+      this.pendingMessages.push(message);
+      
+      // Limit queue size
+      if (this.pendingMessages.length > this.maxPendingMessages) {
+        this.pendingMessages.shift();
+      }
+      
+      console.log(`Queued message (${this.pendingMessages.length} pending):`, message.type);
+    }
+  }
+
+  /**
+   * Flush pending messages after reconnection
+   */
+  flushPendingMessages() {
+    if (this.pendingMessages.length === 0) return;
+    
+    const messageCount = this.pendingMessages.length;
+    console.log(`Flushing ${messageCount} pending messages`);
+    
+    // Remove old messages (older than 5 minutes)
+    const now = Date.now();
+    const maxAge = 5 * 60 * 1000;
+    this.pendingMessages = this.pendingMessages.filter(m => 
+      (now - m._queuedAt) < maxAge
+    );
+    
+    // Send all pending messages
+    const messagesToSend = [...this.pendingMessages];
+    this.pendingMessages = [];
+    
+    messagesToSend.forEach(message => {
+      delete message._queuedAt;
+      this.send(message);
+    });
+    
+    // Emit event that messages were flushed
+    if (messagesToSend.length > 0) {
+      this.emit('messagesFlushed', { count: messagesToSend.length });
     }
   }
 
@@ -302,6 +368,7 @@ export class WebSocketClient {
     }
     this.gameId = null;
     this.authToken = null;
+    this.pendingMessages = []; // Clear queue on intentional disconnect
   }
 
   /**
