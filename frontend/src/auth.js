@@ -73,7 +73,9 @@ export class GoogleAuth {
     google.accounts.id.initialize({
       client_id: this.clientId,
       callback: (response) => this.handleCredentialResponse(response),
-      auto_select: false
+      auto_select: true,
+      cancel_on_tap_outside: false,
+      itp_support: true
     });
 
     // Check for existing session
@@ -154,8 +156,10 @@ export class GoogleAuth {
     }
 
     google.accounts.id.prompt((notification) => {
+      console.log('One Tap status:', notification.getMomentType(), notification.getDismissedReason?.(), notification.getNotDisplayedReason?.());
+      
       if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        console.log('One Tap not displayed, showing button', notification.getNotDisplayedReason());
+        console.log('One Tap not shown, reason:', notification.getNotDisplayedReason?.() || notification.getDismissedReason?.());
         // Show manual sign-in button if prompt is not displayed
         const btnElement = document.getElementById('btn-google-login');
         if (btnElement) {
@@ -166,6 +170,21 @@ export class GoogleAuth {
             text: 'signin_with'
           });
           btnElement.classList.remove('hidden');
+          btnElement.style.display = 'block';
+        }
+      } else if (notification.isDismissedMoment()) {
+        console.log('One Tap was dismissed by user');
+        // Show button as fallback
+        const btnElement = document.getElementById('btn-google-login');
+        if (btnElement) {
+          google.accounts.id.renderButton(btnElement, { 
+            theme: 'outline', 
+            size: 'large', 
+            width: '100%',
+            text: 'signin_with'
+          });
+          btnElement.classList.remove('hidden');
+          btnElement.style.display = 'block';
         }
       }
     });
