@@ -427,22 +427,6 @@ export class GameController {
       alert('Failed to join game. The link may be invalid or expired.');
     }
   }
-      this.stateMachine.setPlayer(2, {
-        id: this.auth.getUser().id,
-        name: this.auth.getUser().name
-      });
-      
-      this.stateMachine.setState(GameState.WAITING);
-      
-      // In a real implementation, the answer would be sent back to the host
-      // For simplicity, we'll show it for manual exchange
-      console.log('Answer (share with host):', answer);
-      
-    } catch (error) {
-      console.error('Failed to join game:', error);
-      alert('Failed to join game. Please try again.');
-    }
-  }
 
   async startAnonymousGame() {
     this.stateMachine.setMode(GameMode.ONLINE);
