@@ -575,7 +575,7 @@ export class GameRenderer {
     const vertices = [];
     const indices = [];
     const vertexMap = new Map();
-    const triangleSet = new Set(); // Track unique triangles to avoid duplicates
+    const processedCells = new Set();
     
     // Build vertices array
     for (const key of allPoints) {
@@ -586,84 +586,40 @@ export class GameRenderer {
       vertices.push(worldX(x), worldY(y), 0);
     }
     
-    // Helper to add triangle only if not already added
-    const addTriangle = (i0, i1, i2) => {
-      // Sort indices to create canonical representation
-      const sorted = [i0, i1, i2].sort((a, b) => a - b);
-      const key = sorted.join(',');
-      if (!triangleSet.has(key)) {
-        triangleSet.add(key);
-        indices.push(i0, i1, i2);
-      }
-    };
-    
-    // First pass: create triangles for complete rectangular cells
-    const processedCells = new Set();
-    for (const { x, y } of capturedDots) {
-      const cells = [
-        { x: x, y: y, corners: [[x, y], [x+1, y], [x+1, y+1], [x, y+1]] },
-        { x: x-1, y: y, corners: [[x-1, y], [x, y], [x, y+1], [x-1, y+1]] },
-        { x: x-1, y: y-1, corners: [[x-1, y-1], [x, y-1], [x, y], [x-1, y]] },
-        { x: x, y: y-1, corners: [[x, y-1], [x+1, y-1], [x+1, y], [x, y]] }
-      ];
-      
-      for (const cell of cells) {
-        const cellKey = `${cell.x},${cell.y}`;
-        if (processedCells.has(cellKey)) continue;
-        
-        const cornerKeys = cell.corners.map(([cx, cy]) => `${cx},${cy}`);
-        const allCornersExist = cornerKeys.every(k => allPoints.has(k));
-        
-        if (allCornersExist) {
-          processedCells.add(cellKey);
-          const [c0, c1, c2, c3] = cornerKeys.map(k => vertexMap.get(k));
-          
-          if (c0 !== undefined && c1 !== undefined && c2 !== undefined && c3 !== undefined) {
-            addTriangle(c0, c1, c2);
-            addTriangle(c0, c2, c3);
-          }
-        }
-      }
+    // Find bounding box of all points to scan for cells
+    let minX = gridSize, maxX = -1, minY = gridSize, maxY = -1;
+    for (const key of allPoints) {
+      const [xStr, yStr] = key.split(',');
+      const x = parseInt(xStr);
+      const y = parseInt(yStr);
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
     }
     
-    // Second pass: fill any remaining gaps with fan triangulation
-    for (const { x, y } of capturedDots) {
-      const centerKey = `${x},${y}`;
-      const centerIdx = vertexMap.get(centerKey);
-      
-      // Get adjacent points
-      const neighbors = [];
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          const nKey = `${nx},${ny}`;
-          if (allPoints.has(nKey)) {
-            neighbors.push({ x: nx, y: ny, key: nKey, dx, dy });
-          }
-        }
-      }
-      
-      // Sort neighbors by angle
-      neighbors.sort((a, b) => {
-        const angleA = Math.atan2(a.dy, a.dx);
-        const angleB = Math.atan2(b.dy, b.dx);
-        return angleA - angleB;
-      });
-      
-      // Create triangles between center and adjacent neighbor pairs
-      for (let i = 0; i < neighbors.length; i++) {
-        const n1 = neighbors[i];
-        const n2 = neighbors[(i + 1) % neighbors.length];
+    // Scan all cells in the bounding box - use ONLY cell-based triangulation
+    for (let cy = minY; cy < maxY; cy++) {
+      for (let cx = minX; cx < maxX; cx++) {
+        const cellKey = `${cx},${cy}`;
+        if (processedCells.has(cellKey)) continue;
         
-        const dist = Math.abs(n1.dx - n2.dx) + Math.abs(n1.dy - n2.dy);
-        if (dist <= GameRenderer.NEIGHBOR_ADJACENCY_DISTANCE) {
-          const n1Idx = vertexMap.get(n1.key);
-          const n2Idx = vertexMap.get(n2.key);
+        // Check if all 4 corners of this cell exist in our point set
+        const corners = [
+          `${cx},${cy}`,
+          `${cx+1},${cy}`,
+          `${cx+1},${cy+1}`,
+          `${cx},${cy+1}`
+        ];
+        
+        if (corners.every(k => allPoints.has(k))) {
+          processedCells.add(cellKey);
+          const [c0, c1, c2, c3] = corners.map(k => vertexMap.get(k));
           
-          if (n1Idx !== undefined && n2Idx !== undefined) {
-            addTriangle(centerIdx, n1Idx, n2Idx);
+          if (c0 !== undefined && c1 !== undefined && c2 !== undefined && c3 !== undefined) {
+            // Two triangles to fill the quad - each triangle used exactly once
+            indices.push(c0, c1, c2);
+            indices.push(c0, c2, c3);
           }
         }
       }
