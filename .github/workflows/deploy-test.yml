@@ -47,13 +47,18 @@ jobs:
 
       - name: Build and push frontend image
         run: |
-          # Check if insecure registry is configured
-          cat /etc/docker/daemon.json 2>/dev/null || echo 'No daemon.json found, assuming insecure registry is configured'
+          # Verify registry is accessible
+          curl -f http://${{ secrets.REGISTRY_URL }}/v2/ || { echo "Registry not accessible"; exit 1; }
+          
+          # Verify Docker can see insecure registry config
+          docker info | grep -A 3 'Insecure Registries' || { echo "Insecure registry not configured"; exit 1; }
           
           TAGS="${{ steps.meta-frontend.outputs.tags }}"
           for tag in $TAGS; do
+            echo "Building $tag"
             docker build -t $tag ./frontend
-            docker push $tag
+            echo "Pushing $tag"
+            docker push $tag || { echo "Failed to push $tag"; docker info | grep -A 5 'Insecure'; exit 1; }
           done
 
       - name: Build and push backend image
