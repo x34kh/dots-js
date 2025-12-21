@@ -66,6 +66,10 @@ metadata:
 spec:
   selector:
     app: dots-backend
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
   ports:
     - port: 8080
       targetPort: 8080
