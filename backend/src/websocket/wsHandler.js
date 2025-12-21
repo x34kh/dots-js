@@ -4,12 +4,14 @@
  */
 
 export class WebSocketHandler {
-  constructor(wss, authService, gameManager) {
+  constructor(wss, authService, gameManager, asyncGameManager) {
     this.wss = wss;
     this.authService = authService;
     this.gameManager = gameManager;
+    this.asyncGameManager = asyncGameManager;
     this.clients = new Map(); // ws -> { userId, user }
     this.userSockets = new Map(); // userId -> ws
+    this.gameToAsync = new Map(); // realtime gameId -> async gameId
 
     this.setupServer();
   }
@@ -194,6 +196,9 @@ export class WebSocketHandler {
       // Notify both players game is starting
       const game = result.game;
       if (game && game.status === 'playing') {
+        // Save game to async storage so it can be resumed
+        this.saveGameToAsync(gameId, game, false); // Not ranked for join games
+        
         this.broadcastToGame(gameId, {
           type: 'game_start',
           data: {
@@ -247,6 +252,9 @@ export class WebSocketHandler {
           isRanked: result.isRanked
         }
       };
+
+      // Save game to async storage
+      this.saveGameToAsync(result.gameId, result.game, result.isRanked);
 
       if (ws1) {
         this.send(ws1, { ...startMessage, data: { ...startMessage.data, playerNumber: 1 } });
@@ -311,6 +319,9 @@ export class WebSocketHandler {
     );
 
     if (result.success) {
+      // Sync move to async storage
+      this.syncMoveToAsync(result.gameId, move.x1, move.y1, client.userId);
+      
       // Send result to moving player
       this.send(ws, {
         type: 'move_result',
@@ -459,6 +470,52 @@ export class WebSocketHandler {
           this.send(ws, message);
         }
       }
+    }
+  }
+  
+  /**
+   * Save a realtime game to async storage for persistence
+   */
+  saveGameToAsync(realtimeGameId, game, isRanked) {
+    try {
+      const player1Id = game.players[1].id;
+      const player2Id = game.players[2].id;
+      const player1Name = game.players[1].name || 'Player 1';
+      const player2Name = game.players[2].name || 'Player 2';
+      
+      // Create async game with same grid size
+      const asyncGame = this.asyncGameManager.createGame(
+        player1Id,
+        player2Id,
+        game.gridSize || 10,
+        isRanked,
+        player1Name,
+        player2Name
+      );
+      
+      // Map realtime gameId to async gameId
+      this.gameToAsync.set(realtimeGameId, asyncGame.id);
+      
+      console.log(`Saved realtime game ${realtimeGameId} as async game ${asyncGame.id}`);
+    } catch (error) {
+      console.error('Failed to save game to async storage:', error);
+    }
+  }
+  
+  /**
+   * Sync a move from realtime game to async storage
+   */
+  syncMoveToAsync(realtimeGameId, x, y, userId) {
+    const asyncGameId = this.gameToAsync.get(realtimeGameId);
+    if (!asyncGameId) {
+      console.warn('No async game found for realtime game:', realtimeGameId);
+      return;
+    }
+    
+    try {
+      this.asyncGameManager.makeMove(asyncGameId, userId, x, y);
+    } catch (error) {
+      console.error('Failed to sync move to async storage:', error);
     }
   }
 }

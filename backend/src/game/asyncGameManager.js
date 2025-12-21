@@ -23,7 +23,7 @@ export class AsyncGameManager {
   /**
    * Create a new async game
    */
-  createGame(player1Id, player2Id, gridSize = 10, isRanked = false) {
+  createGame(player1Id, player2Id, gridSize = 10, isRanked = false, player1Name = 'Player 1', player2Name = 'Player 2') {
     // Check player game limits
     if (this.getPlayerActiveGameCount(player1Id) >= this.maxGamesPerPlayer) {
       throw new Error('Player 1 has reached maximum active games');
@@ -39,6 +39,8 @@ export class AsyncGameManager {
       id: gameId,
       player1Id,
       player2Id,
+      player1Name,
+      player2Name,
       gridSize,
       isRanked,
       currentPlayer: 1,
@@ -163,10 +165,10 @@ export class AsyncGameManager {
     this.eloService.recordMatch({
       gameId: game.id,
       player1Id: game.player1Id,
-      player1Name: 'Player 1', // TODO: Get actual names
+      player1Name: game.player1Name || 'Player 1',
       player1Score: game.scores[1],
       player2Id: game.player2Id,
-      player2Name: 'Player 2',
+      player2Name: game.player2Name || 'Player 2',
       player2Score: game.scores[2],
       winnerId,
       isRanked: game.isRanked,
@@ -185,12 +187,13 @@ export class AsyncGameManager {
 
     const playerNum = game.player1Id === userId ? 1 : 2;
     const opponentId = playerNum === 1 ? game.player2Id : game.player1Id;
+    const opponentName = playerNum === 1 ? game.player2Name : game.player1Name;
     const opponentRating = this.eloService.getRating(opponentId);
 
     return {
       id: game.id,
       opponentId,
-      opponentName: opponentRating.userId, // TODO: Get actual name
+      opponentName: opponentName || opponentId,
       opponentRating: opponentRating.rating,
       myScore: game.scores[playerNum],
       opponentScore: game.scores[playerNum === 1 ? 2 : 1],

@@ -42,7 +42,7 @@ const server = createServer(app);
 
 // Create WebSocket server
 const wss = new WebSocketServer({ server, path: '/ws' });
-const wsHandler = new WebSocketHandler(wss, authService, gameManager);
+const wsHandler = new WebSocketHandler(wss, authService, gameManager, asyncGameManager);
 
 // Setup REST routes
 app.use('/api', createRouter(authService, gameManager, eloService, asyncGameManager));
