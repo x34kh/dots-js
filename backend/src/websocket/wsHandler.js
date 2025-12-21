@@ -312,11 +312,15 @@ export class WebSocketHandler {
       return;
     }
 
+    console.log(`handleMove: client.userId=${client.userId}, move:`, move);
+
     const result = this.gameManager.makeMove(
       client.userId,
       move.x,
       move.y
     );
+
+    console.log(`handleMove result:`, result);
 
     if (result.success) {
       // Sync move to async storage

@@ -82,13 +82,27 @@ export class GameState {
   }
 
   getPlayerNumber(playerId) {
-    if (this.players[1] && this.players[1].id === playerId) return 1;
-    if (this.players[2] && this.players[2].id === playerId) return 2;
+    console.log(`getPlayerNumber: looking for playerId=${playerId}`);
+    console.log(`  Player 1: ${this.players[1] ? this.players[1].id : 'null'}`);
+    console.log(`  Player 2: ${this.players[2] ? this.players[2].id : 'null'}`);
+    
+    if (this.players[1] && this.players[1].id === playerId) {
+      console.log('  -> Found as Player 1');
+      return 1;
+    }
+    if (this.players[2] && this.players[2].id === playerId) {
+      console.log('  -> Found as Player 2');
+      return 2;
+    }
+    console.log('  -> NOT FOUND!');
     return null;
   }
 
   isPlayerTurn(playerId) {
-    return this.getPlayerNumber(playerId) === this.currentPlayer;
+    const playerNum = this.getPlayerNumber(playerId);
+    const isTurn = playerNum === this.currentPlayer;
+    console.log(`isPlayerTurn: playerNum=${playerNum}, currentPlayer=${this.currentPlayer}, isTurn=${isTurn}`);
+    return isTurn;
   }
 
   makeMove(playerId, x, y) {
