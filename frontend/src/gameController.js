@@ -360,7 +360,10 @@ export class GameController {
       const { gameId, link } = await this.p2p.createGame();
       this.stateMachine.gameId = gameId;
       
-      // Show share link
+      // Update browser URL to the shareable link
+      window.history.pushState({}, '', link);
+      
+      // Show share link in input field as well
       document.getElementById('share-link').value = link;
       document.getElementById('share-link-container').classList.remove('hidden');
       
