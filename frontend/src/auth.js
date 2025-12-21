@@ -155,36 +155,32 @@ export class GoogleAuth {
       return;
     }
 
+    // Always ensure button is visible first as fallback
+    const btnElement = document.getElementById('btn-google-login');
+    if (btnElement) {
+      btnElement.classList.remove('hidden');
+      btnElement.style.display = 'block';
+    }
+    
+    // Try to show One Tap
     google.accounts.id.prompt((notification) => {
-      console.log('One Tap status:', notification.getMomentType(), notification.getDismissedReason?.(), notification.getNotDisplayedReason?.());
+      const status = notification.getMomentType();
+      const notDisplayedReason = notification.getNotDisplayedReason?.();
+      const dismissedReason = notification.getDismissedReason?.();
       
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        console.log('One Tap not shown, reason:', notification.getNotDisplayedReason?.() || notification.getDismissedReason?.());
-        // Show manual sign-in button if prompt is not displayed
-        const btnElement = document.getElementById('btn-google-login');
-        if (btnElement) {
+      console.log('One Tap status:', status, 'notDisplayed:', notDisplayedReason, 'dismissed:', dismissedReason);
+      
+      // If One Tap showed, great! If not, button is already visible
+      if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
+        console.log('One Tap not shown - button fallback already visible');
+        // Render the Google button in case it hasn't been rendered yet
+        if (btnElement && !btnElement.hasChildNodes()) {
           google.accounts.id.renderButton(btnElement, { 
             theme: 'outline', 
             size: 'large', 
             width: '100%',
             text: 'signin_with'
           });
-          btnElement.classList.remove('hidden');
-          btnElement.style.display = 'block';
-        }
-      } else if (notification.isDismissedMoment()) {
-        console.log('One Tap was dismissed by user');
-        // Show button as fallback
-        const btnElement = document.getElementById('btn-google-login');
-        if (btnElement) {
-          google.accounts.id.renderButton(btnElement, { 
-            theme: 'outline', 
-            size: 'large', 
-            width: '100%',
-            text: 'signin_with'
-          });
-          btnElement.classList.remove('hidden');
-          btnElement.style.display = 'block';
         }
       }
     });
