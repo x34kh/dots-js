@@ -272,6 +272,7 @@ export class LobbyUI {
 
   logout() {
     // Clear auth and reload
+    sessionStorage.removeItem('google_token');
     localStorage.removeItem('google_token');
     localStorage.removeItem('anon_id');
     localStorage.removeItem('anon_name');

@@ -32,6 +32,7 @@ export class GameController {
     this.selectedGridSize = 10; // Default grid size
     this.pendingGameMode = null; // Store the selected game mode before grid size selection
     this.gameStarted = false; // Flag to prevent multiple startGame() calls
+    this.autoShowLobbyOnLoad = false; // Flag to show lobby after initial auth
 
     this.init();
   }
@@ -50,6 +51,32 @@ export class GameController {
     // Initialize auth (optional)
     try {
       await this.auth.init();
+      
+      // Set up auth event handlers for auto-login/lobby
+      this.auth.on('signIn', async (data) => {
+        console.log('User signed in:', data.user.name);
+        this.updateUserDisplay();
+        
+        // If this is the initial load and we have Google auth, show lobby
+        if (this.autoShowLobbyOnLoad || this.config.googleClientId) {
+          this.autoShowLobbyOnLoad = false;
+          await this.autoStartOnlineMode();
+        }
+      });
+      
+      // If Google auth is available, trigger auto-login
+      if (this.config.googleClientId) {
+        // Check if already signed in from session
+        if (this.auth.isSignedIn()) {
+          console.log('Already signed in, showing lobby');
+          await this.autoStartOnlineMode();
+        } else {
+          // Show Google sign-in prompt automatically
+          console.log('Showing Google sign-in prompt');
+          this.autoShowLobbyOnLoad = true;
+          this.auth.signIn();
+        }
+      }
     } catch (error) {
       console.warn('Google Auth not available:', error);
     }
@@ -605,16 +632,19 @@ export class GameController {
     
     // Require sign in for online mode
     if (!this.auth.isSignedIn()) {
+      this.autoShowLobbyOnLoad = true;
       this.auth.signIn();
-      
-      this.auth.on('signIn', () => {
-        this.updateUserDisplay();
-        this.startOnlineGame(); // Retry after sign in
-      });
       return;
     }
     
     // Connect to server and show lobby
+    await this.connectToServer(false);
+    await this.showLobby();
+  }
+  
+  async autoStartOnlineMode() {
+    // Called when user is already signed in (on page load)
+    this.stateMachine.setMode(GameMode.ONLINE);
     await this.connectToServer(false);
     await this.showLobby();
   }

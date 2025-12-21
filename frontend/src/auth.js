@@ -154,13 +154,19 @@ export class GoogleAuth {
     }
 
     google.accounts.id.prompt((notification) => {
-      if (notification.isNotDisplayed()) {
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        console.log('One Tap not displayed, showing button', notification.getNotDisplayedReason());
         // Show manual sign-in button if prompt is not displayed
-        google.accounts.id.renderButton(
-          document.getElementById('btn-google-login'),
-          { theme: 'outline', size: 'large', width: '100%' }
-        );
-        document.getElementById('btn-google-login').classList.remove('hidden');
+        const btnElement = document.getElementById('btn-google-login');
+        if (btnElement) {
+          google.accounts.id.renderButton(btnElement, { 
+            theme: 'outline', 
+            size: 'large', 
+            width: '100%',
+            text: 'signin_with'
+          });
+          btnElement.classList.remove('hidden');
+        }
       }
     });
   }
