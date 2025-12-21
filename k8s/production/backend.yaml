@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ${REGISTRY}/${IMAGE_PREFIX}/backend:${IMAGE_TAG}
+          image: ${REGISTRY}/backend:${IMAGE_TAG}
           ports:
             - containerPort: 8080
           env:
