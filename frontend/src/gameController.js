@@ -205,6 +205,24 @@ export class GameController {
       skinManager.selectSkin(skinId);
       skinManager.clearTextureCache();
       
+      // Update local player's skin
+      const localPlayerId = this.stateMachine.localPlayerId || 1;
+      skinManager.setPlayerSkin(localPlayerId, skinId);
+      
+      // If in P2P mode, send skin update to opponent
+      if (this.p2p && this.p2p.isConnected && this.stateMachine.mode === GameMode.DEMO) {
+        const playerInfo = this.stateMachine.getPlayer(localPlayerId);
+        if (playerInfo) {
+          playerInfo.skin = skinId;
+          this.p2p.sendPlayerInfo({
+            playerId: playerInfo.id,
+            name: playerInfo.name,
+            skin: skinId,
+            playerNum: localPlayerId
+          });
+        }
+      }
+      
       // Update renderer colors
       if (this.renderer) {
         this.renderer.updateSkinColors();
@@ -219,6 +237,24 @@ export class GameController {
         // Auto-select after purchase
         skinManager.selectSkin(skinId);
         skinManager.clearTextureCache();
+        
+        // Update local player's skin
+        const localPlayerId = this.stateMachine.localPlayerId || 1;
+        skinManager.setPlayerSkin(localPlayerId, skinId);
+        
+        // If in P2P mode, send skin update to opponent
+        if (this.p2p && this.p2p.isConnected && this.stateMachine.mode === GameMode.DEMO) {
+          const playerInfo = this.stateMachine.getPlayer(localPlayerId);
+          if (playerInfo) {
+            playerInfo.skin = skinId;
+            this.p2p.sendPlayerInfo({
+              playerId: playerInfo.id,
+              name: playerInfo.name,
+              skin: skinId,
+              playerNum: localPlayerId
+            });
+          }
+        }
         
         if (this.renderer) {
           this.renderer.updateSkinColors();
@@ -379,8 +415,10 @@ export class GameController {
       this.stateMachine.localPlayerId = 1;
       this.stateMachine.setPlayer(1, {
         id: this.auth.getUser().id,
-        name: this.auth.getUser().name
+        name: this.auth.getUser().name,
+        skin: skinManager.currentSkin
       });
+      skinManager.setPlayerSkin(1, skinManager.currentSkin);
       
       // Wait for opponent
       this.stateMachine.setState(GameState.WAITING);
@@ -419,8 +457,10 @@ export class GameController {
       this.stateMachine.localPlayerId = 2;
       this.stateMachine.setPlayer(2, {
         id: this.auth.getUser().id,
-        name: this.auth.getUser().name
+        name: this.auth.getUser().name,
+        skin: skinManager.currentSkin
       });
+      skinManager.setPlayerSkin(2, skinManager.currentSkin);
       
     } catch (error) {
       console.error('Failed to join demo game:', error);
@@ -471,10 +511,14 @@ export class GameController {
 
     this.p2p.on('ready', () => {
       console.log('P2P ready');
-      // Send player info
+      // Send player info with skin
+      const playerNum = this.stateMachine.localPlayerId;
+      const playerInfo = this.stateMachine.getPlayer(playerNum);
       this.p2p.sendPlayerInfo({
-        playerId: this.stateMachine.localPlayerId,
-        name: this.auth.getUser().name
+        playerId: playerInfo.id,
+        name: playerInfo.name,
+        skin: playerInfo.skin || skinManager.currentSkin,
+        playerNum: playerNum
       });
       
       // Don't start game yet - wait for player info exchange
@@ -484,8 +528,15 @@ export class GameController {
       const opponentId = this.stateMachine.localPlayerId === 1 ? 2 : 1;
       this.stateMachine.setPlayer(opponentId, {
         id: data.playerId,
-        name: data.name
+        name: data.name,
+        skin: data.skin || 'default'
       });
+      
+      // Set opponent's skin
+      if (data.skin) {
+        skinManager.setPlayerSkin(opponentId, data.skin);
+        this.renderer.updateColors();
+      }
       
       // Both players connected - start the game
       this.startGame();
@@ -931,6 +982,13 @@ export class GameController {
     
     p1Card.querySelector('.player-name').textContent = this.stateMachine.players[1].name;
     p2Card.querySelector('.player-name').textContent = this.stateMachine.players[2].name;
+    
+    // Update player card colors based on their skins
+    const p1SkinInfo = skinManager.getPlayerSkinInfo(1);
+    const p2SkinInfo = skinManager.getPlayerSkinInfo(2);
+    
+    p1Card.style.setProperty('--player-color', `#${p1SkinInfo.color.toString(16).padStart(6, '0')}`);
+    p2Card.style.setProperty('--player-color', `#${p2SkinInfo.color.toString(16).padStart(6, '0')}`);
     
     // Also update score displays to ensure they reflect current state
     this.updateScoreDisplay(1, this.stateMachine.players[1].score);

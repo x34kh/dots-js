@@ -137,9 +137,10 @@ export class PatternGenerator {
  */
 export class SkinManager {
   constructor() {
-    this.currentSkin = 'default';
+    this.currentSkin = 'default'; // Local player's skin
     this.ownedSkins = ['default']; // Default skin is always owned
     this.patternTextures = new Map();
+    this.playerSkins = { 1: 'default', 2: 'default' }; // Per-player skins
     
     this.loadFromStorage();
   }
@@ -241,10 +242,11 @@ export class SkinManager {
    * Get player colors for the current skin
    */
   getPlayerColors() {
-    const skin = this.getCurrentSkin();
+    const skin1 = this.getSkin(this.playerSkins[1]) || SKINS.default;
+    const skin2 = this.getSkin(this.playerSkins[2]) || SKINS.default;
     return {
-      1: new THREE.Color(skin.player1.dotColor),
-      2: new THREE.Color(skin.player2.dotColor)
+      1: new THREE.Color(skin1.player1.dotColor),
+      2: new THREE.Color(skin2.player2.dotColor)
     };
   }
   
@@ -252,10 +254,11 @@ export class SkinManager {
    * Get capture colors for the current skin
    */
   getCaptureColors() {
-    const skin = this.getCurrentSkin();
+    const skin1 = this.getSkin(this.playerSkins[1]) || SKINS.default;
+    const skin2 = this.getSkin(this.playerSkins[2]) || SKINS.default;
     return {
-      1: new THREE.Color(skin.player1.captureColor),
-      2: new THREE.Color(skin.player2.captureColor)
+      1: new THREE.Color(skin1.player1.captureColor),
+      2: new THREE.Color(skin2.player2.captureColor)
     };
   }
   
@@ -263,14 +266,15 @@ export class SkinManager {
    * Get or create pattern texture for a player
    */
   getPatternTexture(playerNum) {
-    const skin = this.getCurrentSkin();
+    const skinId = this.playerSkins[playerNum] || 'default';
+    const skin = this.getSkin(skinId) || SKINS.default;
     const playerConfig = playerNum === 1 ? skin.player1 : skin.player2;
     
     if (!playerConfig.pattern) {
       return null;
     }
     
-    const cacheKey = `${this.currentSkin}_${playerNum}`;
+    const cacheKey = `${skinId}_${playerNum}`;
     
     if (!this.patternTextures.has(cacheKey)) {
       const texture = PatternGenerator.getPatternTexture(
@@ -283,6 +287,36 @@ export class SkinManager {
     }
     
     return this.patternTextures.get(cacheKey) || null;
+  }
+  
+  /**
+   * Set skin for a specific player
+   */
+  setPlayerSkin(playerNum, skinId) {
+    if (SKINS[skinId]) {
+      this.playerSkins[playerNum] = skinId;
+    }
+  }
+  
+  /**
+   * Get skin for a specific player
+   */
+  getPlayerSkin(playerNum) {
+    return this.playerSkins[playerNum] || 'default';
+  }
+  
+  /**
+   * Get skin info for a player (for scoreboard display)
+   */
+  getPlayerSkinInfo(playerNum) {
+    const skinId = this.playerSkins[playerNum] || 'default';
+    const skin = this.getSkin(skinId) || SKINS.default;
+    const playerConfig = playerNum === 1 ? skin.player1 : skin.player2;
+    return {
+      skinId,
+      skinName: skin.name,
+      color: playerConfig.dotColor
+    };
   }
   
   /**
