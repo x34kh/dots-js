@@ -32,11 +32,27 @@ export class LobbyUI {
 
   async loadProfile() {
     const userId = this.authState.userId;
+    
+    if (!userId || userId === 'null' || userId === 'undefined') {
+      console.warn('Invalid user ID:', userId, 'Auth state:', this.authState);
+      this.profileData = {
+        rating: 1500,
+        gamesPlayed: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        winRate: 0,
+        recentMatches: []
+      };
+      return;
+    }
+    
     const apiUrl = window.GAME_CONFIG?.backendUrl || 
                    import.meta.env.VITE_BACKEND_URL || 
                    'http://localhost:3001';
     
     try {
+      console.log('Loading profile for user:', userId);
       const response = await fetch(`${apiUrl}/api/profile/${userId}`);
       if (response.ok) {
         this.profileData = await response.json();
@@ -82,9 +98,14 @@ export class LobbyUI {
   }
 
   render() {
-    const app = document.getElementById('app');
+    const container = document.getElementById('lobby-container');
     
-    app.innerHTML = `
+    if (!container) {
+      console.error('Lobby container not found!');
+      return;
+    }
+    
+    container.innerHTML = `
       <div class="lobby-container">
         <div class="lobby-header">
           <h1>Dots Game - Lobby</h1>

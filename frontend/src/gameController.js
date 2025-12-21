@@ -652,20 +652,35 @@ export class GameController {
   }
 
   async showLobby() {
+    // Create lobby container if it doesn't exist
+    let lobbyContainer = document.getElementById('lobby-container');
+    if (!lobbyContainer) {
+      lobbyContainer = document.createElement('div');
+      lobbyContainer.id = 'lobby-container';
+      document.body.appendChild(lobbyContainer);
+    }
+    
     if (!this.lobby) {
+      // Ensure we have the user ID - it's 'sub' in JWT tokens
+      const userId = this.auth.user?.sub || this.auth.user?.id || this.auth.getAnonymousAuthData()?.anonymousId;
+      console.log('Creating lobby with user ID:', userId, 'Full user:', this.auth.user);
+      
       this.lobby = new LobbyUI(this.wsClient, {
-        userId: this.auth.user?.sub || this.auth.getAnonymousAuthData()?.anonymousId,
+        userId: userId,
         name: this.auth.user?.name || this.auth.getAnonymousAuthData()?.username,
         picture: this.auth.user?.picture || null
       });
     }
     
-    // Hide menu and show lobby
+    // Hide menu and game container
     const menuElement = document.getElementById('game-menu');
     const gameContainer = document.getElementById('game-container');
     
     if (menuElement) menuElement.style.display = 'none';
     if (gameContainer) gameContainer.style.display = 'none';
+    
+    // Show lobby container
+    lobbyContainer.style.display = 'block';
     
     await this.lobby.show();
   }
