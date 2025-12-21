@@ -108,6 +108,36 @@ export function createRouter(authService, gameManager, eloService) {
     res.json(stats);
   });
 
+  // Profile endpoint - combined stats and recent matches
+  router.get('/profile/:userId', (req, res) => {
+    const stats = eloService.getPlayerStats(req.params.userId);
+    const matches = eloService.getMatchHistory(req.params.userId, 10);
+    
+    res.json({
+      ...stats,
+      recentMatches: matches
+    });
+  });
+
+  // Online stats - player counts
+  router.get('/stats/online', (req, res) => {
+    const queueStats = gameManager.getQueueStats();
+    
+    // Count connected players would need WebSocket tracking
+    // For now, estimate from queue + active games
+    const playersInQueue = queueStats.rankedQueue + queueStats.unrankedQueue;
+    const playersPlaying = queueStats.activeGames * 2; // 2 players per game
+    
+    res.json({
+      playersOnline: playersInQueue + playersPlaying,
+      playersInQueue,
+      playersPlaying,
+      rankedQueue: queueStats.rankedQueue,
+      unrankedQueue: queueStats.unrankedQueue,
+      activeGames: queueStats.activeGames
+    });
+  });
+
   router.get('/leaderboard', (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const leaderboard = eloService.getLeaderboard(limit);
@@ -194,11 +224,13 @@ export function createRouter(authService, gameManager, eloService) {
 
   // Health check
   router.get('/health', (req, res) => {
+    const queueStats = gameManager.getQueueStats();
     res.json({ 
       status: 'ok',
       timestamp: new Date().toISOString(),
-      games: gameManager.games.size,
-      queue: gameManager.matchmakingQueue.length
+      games: queueStats.activeGames,
+      rankedQueue: queueStats.rankedQueue,
+      unrankedQueue: queueStats.unrankedQueue
     });
   });
 

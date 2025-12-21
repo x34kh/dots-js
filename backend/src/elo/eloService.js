@@ -107,8 +107,17 @@ export class EloService {
   async recordMatch(matchData) {
     const match = {
       id: this.matches.length + 1,
-      ...matchData,
-      recordedAt: new Date()
+      gameId: matchData.gameId,
+      player1Id: matchData.player1Id,
+      player1Name: matchData.player1Name,
+      player1Score: matchData.player1Score,
+      player2Id: matchData.player2Id,
+      player2Name: matchData.player2Name,
+      player2Score: matchData.player2Score,
+      winnerId: matchData.winnerId,
+      isRanked: matchData.isRanked || false,
+      completedAt: new Date(),
+      ...matchData
     };
     this.matches.push(match);
     return match;
@@ -150,6 +159,23 @@ export class EloService {
     return this.matches
       .filter(m => m.player1Id === userId || m.player2Id === userId)
       .slice(-limit)
-      .reverse();
+      .reverse()
+      .map(match => {
+        const isPlayer1 = match.player1Id === userId;
+        const won = match.winnerId === userId;
+        const draw = match.winnerId === null;
+        
+        return {
+          id: match.id,
+          gameId: match.gameId,
+          opponentId: isPlayer1 ? match.player2Id : match.player1Id,
+          opponentName: isPlayer1 ? match.player2Name : match.player1Name,
+          myScore: isPlayer1 ? match.player1Score : match.player2Score,
+          opponentScore: isPlayer1 ? match.player2Score : match.player1Score,
+          result: draw ? 'draw' : (won ? 'win' : 'loss'),
+          isRanked: match.isRanked,
+          completedAt: match.completedAt
+        };
+      });
   }
 }

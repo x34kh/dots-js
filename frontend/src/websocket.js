@@ -201,6 +201,9 @@ export class WebSocketClient {
       case 'matchmaking':
         this.emit('matchmaking', message.data);
         break;
+      case 'queue_stats':
+        this.emit('queue_stats', message.data);
+        break;
       default:
         console.warn('Unknown message type:', message.type);
     }
@@ -239,9 +242,10 @@ export class WebSocketClient {
   /**
    * Find a random opponent (matchmaking)
    */
-  findMatch() {
+  findMatch(isRanked = false) {
     this.send({
-      type: 'find_match'
+      type: 'find_match',
+      isRanked
     });
   }
 

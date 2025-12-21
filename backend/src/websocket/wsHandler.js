@@ -53,7 +53,7 @@ export class WebSocketHandler {
         this.handleJoinGame(ws, message.gameId);
         break;
       case 'find_match':
-        this.handleFindMatch(ws);
+        this.handleFindMatch(ws, message.isRanked);
         break;
       case 'cancel_match':
         this.handleCancelMatch(ws);
@@ -87,6 +87,9 @@ export class WebSocketHandler {
           picture: result.user.picture
         }
       });
+      
+      // Broadcast updated online count
+      this.broadcastQueueStats();
     } else {
       this.send(ws, {
         type: 'auth_error',
@@ -137,6 +140,9 @@ export class WebSocketHandler {
         isAnonymous: true
       }
     });
+    
+    // Broadcast updated online count
+    this.broadcastQueueStats();
   }
 
   handleCreateGame(ws) {
@@ -203,7 +209,7 @@ export class WebSocketHandler {
     }
   }
 
-  handleFindMatch(ws) {
+  handleFindMatch(ws, isRanked = false) {
     const client = this.clients.get(ws);
     if (!client) {
       this.sendError(ws, 'Not authenticated');
@@ -213,13 +219,19 @@ export class WebSocketHandler {
     const result = this.gameManager.addToMatchmaking(client.userId, {
       name: client.user.name,
       picture: client.user.picture
-    });
+    }, isRanked);
 
     if (result.waiting) {
       this.send(ws, {
         type: 'matchmaking',
-        data: { status: 'waiting' }
+        data: { 
+          status: 'waiting',
+          isRanked
+        }
       });
+      
+      // Broadcast queue stats to all clients
+      this.broadcastQueueStats();
     } else if (result.success) {
       // Match found - notify both players
       const ws1 = this.userSockets.get(result.player1);
@@ -231,7 +243,8 @@ export class WebSocketHandler {
           gameId: result.gameId,
           player1: result.game.players[1],
           player2: result.game.players[2],
-          currentPlayer: result.game.currentPlayer
+          currentPlayer: result.game.currentPlayer,
+          isRanked: result.isRanked
         }
       };
 
@@ -241,6 +254,9 @@ export class WebSocketHandler {
       if (ws2) {
         this.send(ws2, { ...startMessage, data: { ...startMessage.data, playerNumber: 2 } });
       }
+      
+      // Broadcast updated queue stats
+      this.broadcastQueueStats();
     }
   }
 
@@ -253,6 +269,32 @@ export class WebSocketHandler {
       type: 'matchmaking',
       data: { status: 'cancelled' }
     });
+    
+    // Broadcast updated queue stats
+    this.broadcastQueueStats();
+  }
+
+  broadcastQueueStats() {
+    const stats = this.gameManager.getQueueStats();
+    const playersInQueue = stats.rankedQueue + stats.unrankedQueue;
+    const playersPlaying = stats.activeGames * 2;
+    
+    const message = {
+      type: 'queue_stats',
+      data: {
+        playersOnline: this.clients.size,
+        playersInQueue,
+        playersPlaying,
+        rankedQueue: stats.rankedQueue,
+        unrankedQueue: stats.unrankedQueue,
+        activeGames: stats.activeGames
+      }
+    };
+    
+    // Broadcast to all connected clients
+    for (const ws of this.clients.keys()) {
+      this.send(ws, message);
+    }
   }
 
   handleMove(ws, move) {
@@ -390,6 +432,9 @@ export class WebSocketHandler {
 
       this.userSockets.delete(client.userId);
       this.clients.delete(ws);
+      
+      // Broadcast updated online count
+      this.broadcastQueueStats();
     }
   }
 

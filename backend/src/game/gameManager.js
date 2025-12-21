@@ -11,7 +11,8 @@ export class GameManager {
     this.eloService = eloService;
     this.games = new Map(); // gameId -> GameState
     this.playerGames = new Map(); // playerId -> gameId
-    this.matchmakingQueue = []; // Players waiting for a match
+    this.rankedQueue = []; // Players waiting for ranked match
+    this.unrankedQueue = []; // Players waiting for unranked match
   }
 
   /**
@@ -67,42 +68,50 @@ export class GameManager {
   /**
    * Add player to matchmaking queue
    */
-  addToMatchmaking(playerId, playerData) {
+  addToMatchmaking(playerId, playerData, isRanked = false) {
     // Remove if already in queue
     this.removeFromMatchmaking(playerId);
     
-    this.matchmakingQueue.push({
+    const queueEntry = {
       playerId,
       playerData,
-      joinedAt: Date.now()
-    });
+      joinedAt: Date.now(),
+      isRanked
+    };
+
+    const queue = isRanked ? this.rankedQueue : this.unrankedQueue;
+    queue.push(queueEntry);
 
     // Try to match players
-    return this.tryMatch(playerId);
+    return this.tryMatch(playerId, isRanked);
   }
 
   /**
    * Remove player from matchmaking queue
    */
   removeFromMatchmaking(playerId) {
-    this.matchmakingQueue = this.matchmakingQueue.filter(p => p.playerId !== playerId);
+    this.rankedQueue = this.rankedQueue.filter(p => p.playerId !== playerId);
+    this.unrankedQueue = this.unrankedQueue.filter(p => p.playerId !== playerId);
   }
 
   /**
    * Try to match waiting players
    */
-  tryMatch(playerId) {
-    if (this.matchmakingQueue.length < 2) {
+  tryMatch(playerId, isRanked = false) {
+    const queue = isRanked ? this.rankedQueue : this.unrankedQueue;
+    
+    if (queue.length < 2) {
       return { success: false, waiting: true };
     }
 
     // Find two players to match
-    const player1 = this.matchmakingQueue.shift();
-    const player2 = this.matchmakingQueue.shift();
+    const player1 = queue.shift();
+    const player2 = queue.shift();
 
     // Create game
     const gameId = uuidv4();
     const game = new GameState(gameId);
+    game.isRanked = isRanked; // Mark game as ranked/unranked
     
     game.addPlayer(player1.playerId, player1.playerData, 1);
     game.addPlayer(player2.playerId, player2.playerData, 2);
@@ -116,7 +125,8 @@ export class GameManager {
       gameId,
       player1: player1.playerId,
       player2: player2.playerId,
-      game: this.getGameInfo(gameId)
+      game: this.getGameInfo(gameId),
+      isRanked
     };
   }
 
@@ -156,6 +166,8 @@ export class GameManager {
 
     const player1Id = game.players[1]?.id;
     const player2Id = game.players[2]?.id;
+    const player1Name = game.players[1]?.name || player1Id;
+    const player2Name = game.players[2]?.name || player2Id;
 
     if (player1Id && player2Id) {
       // Determine outcome
@@ -168,17 +180,23 @@ export class GameManager {
         result = 0.5; // Draw
       }
 
-      // Update ELO
-      await this.eloService.updateRatings(player1Id, player2Id, result);
+      // Only update ELO for ranked games
+      if (game.isRanked) {
+        await this.eloService.updateRatings(player1Id, player2Id, result);
+      }
 
-      // Store match record
+      // Store match record with detailed info
       await this.eloService.recordMatch({
         gameId,
         player1Id,
+        player1Name,
+        player1Score: game.scores[1] || 0,
         player2Id,
-        winner: game.winner,
-        scores: game.scores,
-        timestamp: new Date()
+        player2Name,
+        player2Score: game.scores[2] || 0,
+        winnerId: game.winner === 1 ? player1Id : game.winner === 2 ? player2Id : null,
+        isRanked: game.isRanked || false,
+        completedAt: new Date()
       });
     }
   }
@@ -225,7 +243,8 @@ export class GameManager {
       scores: game.scores,
       currentPlayer: game.currentPlayer,
       status: game.status,
-      winner: game.winner
+      winner: game.winner,
+      isRanked: game.isRanked || false
     };
   }
 
@@ -235,6 +254,17 @@ export class GameManager {
   getPlayerGame(playerId) {
     const gameId = this.playerGames.get(playerId);
     return gameId ? this.games.get(gameId) : null;
+  }
+
+  /**
+   * Get queue stats
+   */
+  getQueueStats() {
+    return {
+      rankedQueue: this.rankedQueue.length,
+      unrankedQueue: this.unrankedQueue.length,
+      activeGames: this.games.size
+    };
   }
 
   /**

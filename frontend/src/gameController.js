@@ -11,6 +11,7 @@ import { WebSocketClient } from './websocket.js';
 import { GoogleAuth } from './auth.js';
 import { skinManager } from './skins.js';
 import { notificationManager } from './notifications.js';
+import { LobbyUI } from './lobby.js';
 
 export class GameController {
   constructor(config = {}) {
@@ -27,6 +28,7 @@ export class GameController {
     this.p2p = null;
     this.wsClient = null;
     this.auth = new GoogleAuth(this.config.googleClientId);
+    this.lobby = null;
     this.selectedGridSize = 10; // Default grid size
     this.pendingGameMode = null; // Store the selected game mode before grid size selection
     this.gameStarted = false; // Flag to prevent multiple startGame() calls
@@ -607,12 +609,30 @@ export class GameController {
       
       this.auth.on('signIn', () => {
         this.updateUserDisplay();
-        this.connectToServer(false);
+        this.startOnlineGame(); // Retry after sign in
       });
       return;
     }
     
+    // Connect to server and show lobby
     await this.connectToServer(false);
+    await this.showLobby();
+  }
+
+  async showLobby() {
+    if (!this.lobby) {
+      this.lobby = new LobbyUI(this.wsClient, {
+        userId: this.auth.user?.sub || this.auth.getAnonymousAuthData()?.anonymousId,
+        name: this.auth.user?.name || this.auth.getAnonymousAuthData()?.username,
+        picture: this.auth.user?.picture || null
+      });
+    }
+    
+    // Hide menu and show lobby
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('game-container').style.display = 'none';
+    
+    await this.lobby.show();
   }
 
   async connectToServer(isAnonymous = false) {
@@ -635,12 +655,17 @@ export class GameController {
   setupWebSocketEvents() {
     this.wsClient.on('authenticated', (data) => {
       console.log('Authenticated:', data);
-      // Start matchmaking
-      this.wsClient.findMatch();
-      this.stateMachine.setState(GameState.WAITING);
+      // Don't auto-start matchmaking, let lobby control it
     });
 
     this.wsClient.on('gameStart', (data) => {
+      // Hide lobby, show game
+      if (this.lobby) {
+        this.lobby.hide();
+      }
+      
+      document.getElementById('game-container').style.display = 'block';
+      
       this.stateMachine.gameId = data.gameId;
       this.stateMachine.localPlayerId = data.playerNumber;
       
