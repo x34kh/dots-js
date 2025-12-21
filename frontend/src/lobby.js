@@ -440,6 +440,13 @@ export class LobbyUI {
   }
 
   joinQueue(isRanked) {
+    // Check WebSocket connection
+    if (!this.websocket || !this.websocket.isConnected()) {
+      console.error('WebSocket not connected, cannot join queue');
+      alert('Connection lost. Please refresh the page.');
+      return;
+    }
+    
     this.inQueue = true;
     this.currentQueueType = isRanked ? 'ranked' : 'unranked';
     

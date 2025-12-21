@@ -883,18 +883,21 @@ export class GameController {
     
     // Determine which player we are
     const userId = this.auth.user?.sub || this.auth.user?.id;
-    this.stateMachine.localPlayerId = (gameState.player1 === userId) ? 1 : 2;
+    this.stateMachine.localPlayerId = (gameState.player1Id === userId) ? 1 : 2;
     
-    console.log('User ID:', userId, 'LocalPlayerId:', this.stateMachine.localPlayerId);
+    console.log('User ID:', userId);
+    console.log('Player1 ID:', gameState.player1Id, 'Player2 ID:', gameState.player2Id);
+    console.log('LocalPlayerId:', this.stateMachine.localPlayerId);
+    console.log('Current Player:', gameState.currentPlayer);
     
     // Set player info
     this.stateMachine.setPlayer(1, { 
-      id: gameState.player1, 
+      id: gameState.player1Id, 
       name: gameState.player1Name || 'Player 1',
       score: 0
     });
     this.stateMachine.setPlayer(2, { 
-      id: gameState.player2, 
+      id: gameState.player2Id, 
       name: gameState.player2Name || 'Player 2',
       score: 0
     });
