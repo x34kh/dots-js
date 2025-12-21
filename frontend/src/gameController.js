@@ -661,8 +661,11 @@ export class GameController {
     }
     
     // Hide menu and show lobby
-    document.getElementById('menu').style.display = 'none';
-    document.getElementById('game-container').style.display = 'none';
+    const menuElement = document.getElementById('game-menu');
+    const gameContainer = document.getElementById('game-container');
+    
+    if (menuElement) menuElement.style.display = 'none';
+    if (gameContainer) gameContainer.style.display = 'none';
     
     await this.lobby.show();
   }
