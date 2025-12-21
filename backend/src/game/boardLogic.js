@@ -62,15 +62,21 @@ export class BoardLogic {
    * Occupy a dot and calculate captured territories
    */
   occupyDot(x, y, playerNum) {
+    console.log(`BoardLogic.occupyDot: x=${x}, y=${y}, playerNum=${playerNum}`);
+    const dot = this.getDot(x, y);
+    console.log('Dot state:', dot ? { owner: dot.owner, captured: dot.captured, capturedBy: dot.capturedBy } : 'null');
+    
     if (!this.isDotClickable(x, y)) {
+      console.log('Dot is not clickable');
       return { success: false, capturedDots: [] };
     }
 
-    const dot = this.getDot(x, y);
     dot.owner = playerNum;
+    console.log('Dot occupied successfully');
 
     // Calculate captured territories using greedy flood-fill algorithm
     const capturedDots = this.calculateCapturedTerritories(playerNum);
+    console.log('Captured dots:', capturedDots.length);
 
     return {
       success: true,

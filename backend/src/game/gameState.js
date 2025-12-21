@@ -91,20 +91,27 @@ export class GameState {
   }
 
   makeMove(playerId, x, y) {
+    console.log(`GameState.makeMove: playerId=${playerId}, x=${x}, y=${y}, currentPlayer=${this.currentPlayer}`);
+    
     // Validate it's player's turn
     if (!this.isPlayerTurn(playerId)) {
+      console.log('Move rejected: not player turn. Player number:', this.getPlayerNumber(playerId));
       return { success: false, error: 'Not your turn' };
     }
 
     // Validate game is in progress
     if (this.status !== GameStatus.PLAYING) {
+      console.log('Move rejected: game not in progress. Status:', this.status);
       return { success: false, error: 'Game not in progress' };
     }
 
     const playerNum = this.currentPlayer;
+    console.log('Attempting occupyDot with playerNum:', playerNum);
     const result = this.boardLogic.occupyDot(x, y, playerNum);
+    console.log('occupyDot result:', result);
 
     if (!result.success) {
+      console.log('Move rejected by boardLogic');
       return { success: false, error: 'Invalid move' };
     }
 
@@ -130,6 +137,7 @@ export class GameState {
 
     // Always switch turns in dot occupation game
     this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
+    console.log('Turn switched to player:', this.currentPlayer);
 
     // Check game over
     if (this.boardLogic.isGameOver()) {
