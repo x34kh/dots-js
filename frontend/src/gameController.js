@@ -681,6 +681,8 @@ export class GameController {
     console.log('Current state:', this.stateMachine.state);
     console.log('Mode:', this.stateMachine.mode);
     console.log('Players:', this.stateMachine.players);
+    console.log('localPlayerId BEFORE:', this.stateMachine.localPlayerId);
+    console.log('currentPlayer BEFORE:', this.stateMachine.currentPlayer);
     
     this.stateMachine.setState(GameState.PLAYING);
     this.stateMachine.setCurrentPlayer(1);
@@ -700,12 +702,17 @@ export class GameController {
     this.renderer.reset();
     this.stateMachine.reset();
     
+    console.log('localPlayerId AFTER reset:', this.stateMachine.localPlayerId);
+    console.log('currentPlayer AFTER reset:', this.stateMachine.currentPlayer);
+    
     console.log('Updating player cards...');
     // Show player cards (after reset so scores are updated)
     this.updatePlayerCards();
     
     notificationManager.show('Game started!', 'success');
     console.log('startGame() completed');
+    console.log('Final localPlayerId:', this.stateMachine.localPlayerId);
+    console.log('Final currentPlayer:', this.stateMachine.currentPlayer);
   }
 
   forfeitGame() {
@@ -775,17 +782,32 @@ export class GameController {
   }
 
   handleClick(event) {
-    if (this.stateMachine.state !== GameState.PLAYING) return;
-    if (!this.stateMachine.isLocalPlayerTurn()) return;
+    console.log('Click detected!');
+    console.log('State:', this.stateMachine.state);
+    console.log('GameState.PLAYING:', GameState.PLAYING);
+    console.log('localPlayerId:', this.stateMachine.localPlayerId);
+    console.log('currentPlayer:', this.stateMachine.currentPlayer);
+    console.log('isLocalPlayerTurn:', this.stateMachine.isLocalPlayerTurn());
+    
+    if (this.stateMachine.state !== GameState.PLAYING) {
+      console.log('Not in PLAYING state, ignoring click');
+      return;
+    }
+    if (!this.stateMachine.isLocalPlayerTurn()) {
+      console.log('Not local player turn, ignoring click');
+      return;
+    }
     
     this.renderer.getMousePosition(event);
     const dot = this.renderer.getDotAtMouse();
     
     if (!dot || !this.renderer.isDotMeshClickable(dot)) {
+      console.log('No clickable dot at mouse position');
       return;
     }
     
     const { gridX, gridY } = dot.userData;
+    console.log('Making move at:', gridX, gridY);
     this.makeMove(gridX, gridY);
   }
 
