@@ -716,6 +716,9 @@ export class GameController {
     this.renderer.reset();
     this.stateMachine.reset();
     
+    // Update renderer colors to match current skin selections
+    this.renderer.updateSkinColors();
+    
     console.log('localPlayerId AFTER reset:', this.stateMachine.localPlayerId);
     console.log('currentPlayer AFTER reset:', this.stateMachine.currentPlayer);
     
