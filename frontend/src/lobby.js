@@ -174,7 +174,7 @@ export class LobbyUI {
                 <div class="stat-label">Draws</div>
               </div>
               <div class="stat-item">
-                <div class="stat-value">${Number(this.profileData?.winRate || 0).toFixed(1)}%</div>
+                <div class="stat-value">${(Number(this.profileData?.winRate) || 0).toFixed(1)}%</div>
                 <div class="stat-label">Win Rate</div>
               </div>
             </div>
