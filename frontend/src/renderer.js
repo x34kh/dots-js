@@ -575,7 +575,7 @@ export class GameRenderer {
     const vertices = [];
     const indices = [];
     const vertexMap = new Map();
-    const processedCells = new Set();
+    const edgeSet = new Set(); // Track which edges have been used in complete cells
     
     // Build vertices array
     for (const key of allPoints) {
@@ -586,7 +586,19 @@ export class GameRenderer {
       vertices.push(worldX(x), worldY(y), 0);
     }
     
-    // Find bounding box of all points to scan for cells
+    // Helper to mark edges as used in cells
+    const markCellEdges = (c0, c1, c2, c3) => {
+      const edges = [
+        [c0, c1].sort((a, b) => a - b).join(','),
+        [c1, c2].sort((a, b) => a - b).join(','),
+        [c2, c3].sort((a, b) => a - b).join(','),
+        [c3, c0].sort((a, b) => a - b).join(','),
+        [c0, c2].sort((a, b) => a - b).join(',')  // diagonal
+      ];
+      edges.forEach(e => edgeSet.add(e));
+    };
+    
+    // Find bounding box and process complete rectangular cells first
     let minX = gridSize, maxX = -1, minY = gridSize, maxY = -1;
     for (const key of allPoints) {
       const [xStr, yStr] = key.split(',');
@@ -598,13 +610,14 @@ export class GameRenderer {
       maxY = Math.max(maxY, y);
     }
     
-    // Scan all cells in the bounding box - use ONLY cell-based triangulation
+    const processedCells = new Set();
+    
+    // First pass: Fill complete rectangular cells
     for (let cy = minY; cy < maxY; cy++) {
       for (let cx = minX; cx < maxX; cx++) {
         const cellKey = `${cx},${cy}`;
         if (processedCells.has(cellKey)) continue;
         
-        // Check if all 4 corners of this cell exist in our point set
         const corners = [
           `${cx},${cy}`,
           `${cx+1},${cy}`,
@@ -617,9 +630,56 @@ export class GameRenderer {
           const [c0, c1, c2, c3] = corners.map(k => vertexMap.get(k));
           
           if (c0 !== undefined && c1 !== undefined && c2 !== undefined && c3 !== undefined) {
-            // Two triangles to fill the quad - each triangle used exactly once
             indices.push(c0, c1, c2);
             indices.push(c0, c2, c3);
+            markCellEdges(c0, c1, c2, c3);
+          }
+        }
+      }
+    }
+    
+    // Second pass: Fill remaining areas with fan triangulation (only edges not in cells)
+    for (const { x, y } of capturedDots) {
+      const centerKey = `${x},${y}`;
+      const centerIdx = vertexMap.get(centerKey);
+      
+      const neighbors = [];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          const nKey = `${nx},${ny}`;
+          if (allPoints.has(nKey)) {
+            neighbors.push({ x: nx, y: ny, key: nKey, dx, dy });
+          }
+        }
+      }
+      
+      neighbors.sort((a, b) => {
+        const angleA = Math.atan2(a.dy, a.dx);
+        const angleB = Math.atan2(b.dy, b.dx);
+        return angleA - angleB;
+      });
+      
+      for (let i = 0; i < neighbors.length; i++) {
+        const n1 = neighbors[i];
+        const n2 = neighbors[(i + 1) % neighbors.length];
+        
+        const dist = Math.abs(n1.dx - n2.dx) + Math.abs(n1.dy - n2.dy);
+        if (dist <= GameRenderer.NEIGHBOR_ADJACENCY_DISTANCE) {
+          const n1Idx = vertexMap.get(n1.key);
+          const n2Idx = vertexMap.get(n2.key);
+          
+          if (n1Idx !== undefined && n2Idx !== undefined) {
+            // Only add this triangle if its edges aren't already part of a cell
+            const edge1 = [centerIdx, n1Idx].sort((a, b) => a - b).join(',');
+            const edge2 = [centerIdx, n2Idx].sort((a, b) => a - b).join(',');
+            const edge3 = [n1Idx, n2Idx].sort((a, b) => a - b).join(',');
+            
+            if (!edgeSet.has(edge1) || !edgeSet.has(edge2) || !edgeSet.has(edge3)) {
+              indices.push(centerIdx, n1Idx, n2Idx);
+            }
           }
         }
       }
