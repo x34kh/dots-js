@@ -138,8 +138,8 @@ export class GameController {
       this.requestRematch();
     });
 
-    document.getElementById('btn-new-game').addEventListener('click', () => {
-      this.returnToMenu();
+    document.getElementById('btn-return-lobby').addEventListener('click', () => {
+      this.returnToLobbyFromGameOver();
     });
 
     // Forfeit button
@@ -1012,6 +1012,40 @@ export class GameController {
     notificationManager.show('Game saved - you can continue later from Current Games', 'success');
   }
 
+  returnToLobbyFromGameOver() {
+    // Disconnect from game
+    if (this.wsClient) {
+      this.wsClient.disconnect();
+      this.wsClient = null;
+    }
+    if (this.p2p) {
+      this.p2p.close();
+      this.p2p = null;
+    }
+    
+    // Reset game started flag
+    this.gameStarted = false;
+    
+    // Hide game UI
+    document.getElementById('game-container').style.display = 'none';
+    document.getElementById('game-over').classList.add('hidden');
+    document.getElementById('btn-forfeit').classList.add('hidden');
+    document.getElementById('btn-back-to-lobby').classList.add('hidden');
+    
+    // Reset state
+    this.boardLogic.reset();
+    this.renderer.reset();
+    this.stateMachine.setState(GameState.MENU);
+    
+    // Show lobby
+    if (this.lobby) {
+      this.lobby.show();
+    } else {
+      // If no lobby, show game menu
+      document.getElementById('game-menu').classList.remove('hidden');
+    }
+  }
+
   forfeitGame() {
     if (this.stateMachine.state !== GameState.PLAYING) return;
     
@@ -1375,6 +1409,20 @@ export class GameController {
     document.getElementById('winner-text').textContent = winnerText;
     document.getElementById('final-scores').textContent = 
       `${this.stateMachine.players[1].name}: ${p1Score} | ${this.stateMachine.players[2].name}: ${p2Score}`;
+    
+    // Show/hide buttons based on game mode
+    const rematchBtn = document.getElementById('btn-rematch');
+    const returnLobbyBtn = document.getElementById('btn-return-lobby');
+    
+    if (this.stateMachine.mode === GameMode.ONLINE || this.stateMachine.mode === GameMode.ASYNC) {
+      // Online/async games: hide rematch, show return to lobby
+      rematchBtn.classList.add('hidden');
+      returnLobbyBtn.classList.remove('hidden');
+    } else {
+      // Local/P2P games: show rematch, hide return to lobby
+      rematchBtn.classList.remove('hidden');
+      returnLobbyBtn.classList.add('hidden');
+    }
     
     document.getElementById('game-over').classList.remove('hidden');
   }
