@@ -861,8 +861,13 @@ export class GameController {
     // Show forfeit button
     document.getElementById('btn-forfeit').classList.remove('hidden');
     
-    // Hide back to lobby button for real-time games
-    document.getElementById('btn-back-to-lobby').classList.add('hidden');
+    // Show back to lobby button for online/async games (they auto-save)
+    const backToLobbyBtn = document.getElementById('btn-back-to-lobby');
+    if (this.stateMachine.mode === GameMode.ONLINE || this.stateMachine.mode === GameMode.ASYNC) {
+      backToLobbyBtn.classList.remove('hidden');
+    } else {
+      backToLobbyBtn.classList.add('hidden');
+    }
     
     console.log('Resetting board and renderer...');
     // Reset board and scores

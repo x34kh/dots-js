@@ -412,6 +412,26 @@ export class WebSocketHandler {
     if (result && result.gameId) {
       const game = this.gameManager.getGame(result.gameId);
       if (game) {
+        // Handle game over in realtime game manager (records ELO)
+        this.gameManager.handleGameOver(result.gameId);
+        
+        // Also end the async game if it exists
+        const asyncGameId = this.gameToAsync.get(result.gameId);
+        if (asyncGameId) {
+          try {
+            const asyncGame = this.asyncGameManager.games.get(asyncGameId);
+            if (asyncGame && asyncGame.status === 'active') {
+              // End async game with forfeit
+              asyncGame.status = 'completed';
+              asyncGame.winner = game.winner;
+              this.asyncGameManager.endGame(asyncGameId, 'forfeit');
+              console.log(`Ended async game ${asyncGameId} due to forfeit`);
+            }
+          } catch (error) {
+            console.error('Failed to end async game on forfeit:', error);
+          }
+        }
+        
         this.broadcastToGame(result.gameId, {
           type: 'game_over',
           data: {
