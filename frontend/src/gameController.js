@@ -993,13 +993,20 @@ export class GameController {
 
   returnToLobby() {
     // Return to lobby without forfeiting the game
-    // Only works for async games
-    if (this.stateMachine.mode !== GameMode.ASYNC) {
-      console.log('Can only return to lobby from async games');
+    // Works for online and async games (both are saved to async storage)
+    if (this.stateMachine.mode !== GameMode.ASYNC && this.stateMachine.mode !== GameMode.ONLINE) {
+      console.log('Can only return to lobby from online/async games');
+      notificationManager.show('Cannot return to lobby from this game mode', 'error');
       return;
     }
     
     console.log('Returning to lobby, game will be preserved');
+    
+    // Disconnect WebSocket if in online mode (game is saved in async storage)
+    if (this.wsClient) {
+      this.wsClient.disconnect();
+      this.wsClient = null;
+    }
     
     // Reset game started flag
     this.gameStarted = false;
