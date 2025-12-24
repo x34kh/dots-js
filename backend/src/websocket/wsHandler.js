@@ -495,7 +495,7 @@ export class WebSocketHandler {
       const asyncGame = this.asyncGameManager.createGame(
         player1Id,
         player2Id,
-        game.gridSize || 5, // Use stored gridSize, default to 5
+        game.gridSize || 10, // Use stored gridSize, default to 10
         isRanked,
         player1Name,
         player2Name

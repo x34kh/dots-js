@@ -13,7 +13,7 @@ export const GameStatus = {
 };
 
 export class GameState {
-  constructor(gameId, gridSize = 5) {
+  constructor(gameId, gridSize = 10) {
     this.id = gameId;
     this.gridSize = gridSize; // Store grid size
     this.boardLogic = new BoardLogic(gridSize);

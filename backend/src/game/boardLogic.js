@@ -10,7 +10,7 @@
  */
 
 export class BoardLogic {
-  constructor(gridSize = 5) {
+  constructor(gridSize = 10) {
     this.gridSize = gridSize;
     this.dots = new Map(); // key: "x,y", value: { x, y, owner: null | playerNum, captured: boolean }
     this.capturedAreas = []; // Array of { player, dots: [{x, y}] }
