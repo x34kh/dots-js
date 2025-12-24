@@ -1074,6 +1074,30 @@ export class GameController {
     this.endGame({ forfeit: true, forfeiter: currentPlayerId });
   }
 
+  cancelSelection() {
+    // Cancel any pending move selection
+    if (this.pendingMove) {
+      this.pendingMove = null;
+      const confirmBtn = document.getElementById('btn-confirm-move');
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.style.opacity = '0.4';
+      }
+    }
+    
+    // Clear any visual previews
+    if (this.renderer) {
+      this.renderer.clearPreviews();
+      
+      // Clear hover state
+      if (this.renderer.hoverDot) {
+        const prevData = this.renderer.hoverDot.userData;
+        this.renderer.setDotHoverTarget(prevData.gridX, prevData.gridY, false);
+        this.renderer.hoverDot = null;
+      }
+    }
+  }
+
   handleMouseMove(event) {
     if (this.stateMachine.state !== GameState.PLAYING) return;
     if (!this.stateMachine.isLocalPlayerTurn()) return;
