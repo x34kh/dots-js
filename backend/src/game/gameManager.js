@@ -169,6 +169,8 @@ export class GameManager {
     const player1Name = game.players[1]?.name || player1Id;
     const player2Name = game.players[2]?.name || player2Id;
 
+    console.log(`Game over: ${gameId}, isRanked: ${game.isRanked}, winner: ${game.winner}`);
+
     if (player1Id && player2Id) {
       // Determine outcome
       let result;
@@ -182,7 +184,10 @@ export class GameManager {
 
       // Only update ELO for ranked games
       if (game.isRanked) {
+        console.log(`Updating ELO for ranked game: ${player1Name} vs ${player2Name}`);
         await this.eloService.updateRatings(player1Id, player2Id, result);
+      } else {
+        console.log(`Skipping ELO update for unranked game: ${player1Name} vs ${player2Name}`);
       }
 
       // Store match record with detailed info

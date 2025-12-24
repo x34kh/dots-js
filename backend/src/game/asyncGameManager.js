@@ -168,10 +168,15 @@ export class AsyncGameManager {
     const winnerId = game.scores[1] > game.scores[2] ? game.player1Id : 
                      game.scores[2] > game.scores[1] ? game.player2Id : null;
 
+    console.log(`Async game over: ${gameId}, isRanked: ${game.isRanked}, winner: ${winnerId}, reason: ${reason}`);
+
     // Update ELO if ranked
     if (game.isRanked && winnerId) {
+      console.log(`Updating ELO for ranked async game: ${game.player1Name} vs ${game.player2Name}`);
       const result = winnerId === game.player1Id ? 1 : 0;
       this.eloService.updateRatings(game.player1Id, game.player2Id, result);
+    } else {
+      console.log(`Skipping ELO update for async game (isRanked: ${game.isRanked}, winnerId: ${winnerId})`);
     }
 
     // Record match
