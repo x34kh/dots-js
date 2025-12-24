@@ -165,8 +165,17 @@ export class AsyncGameManager {
     game.completedAt = Date.now();
 
     // Determine winner
-    const winnerId = game.scores[1] > game.scores[2] ? game.player1Id : 
-                     game.scores[2] > game.scores[1] ? game.player2Id : null;
+    // If game already has a winner set (e.g., from forfeit), use it
+    // Otherwise determine by score
+    let winnerId;
+    if (game.winner) {
+      // Winner already set (forfeit, disconnect, etc.)
+      winnerId = game.winner === 1 ? game.player1Id : game.player2Id;
+    } else {
+      // Determine winner by score
+      winnerId = game.scores[1] > game.scores[2] ? game.player1Id : 
+                 game.scores[2] > game.scores[1] ? game.player2Id : null;
+    }
 
     console.log(`Async game over: ${gameId}, isRanked: ${game.isRanked}, winner: ${winnerId}, reason: ${reason}`);
 

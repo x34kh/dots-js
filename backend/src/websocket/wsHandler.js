@@ -421,11 +421,11 @@ export class WebSocketHandler {
           try {
             const asyncGame = this.asyncGameManager.games.get(asyncGameId);
             if (asyncGame && asyncGame.status === 'active') {
-              // End async game with forfeit
-              asyncGame.status = 'completed';
+              // Set winner before ending game (so endGame uses correct winner)
               asyncGame.winner = game.winner;
+              asyncGame.status = 'completed';
               this.asyncGameManager.endGame(asyncGameId, 'forfeit');
-              console.log(`Ended async game ${asyncGameId} due to forfeit`);
+              console.log(`Ended async game ${asyncGameId} due to forfeit with winner ${game.winner}`);
             }
           } catch (error) {
             console.error('Failed to end async game on forfeit:', error);
