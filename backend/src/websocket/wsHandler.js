@@ -561,21 +561,48 @@ export class WebSocketHandler {
         }
       }
 
-      // Notify opponent
-      const result = this.gameManager.handleDisconnect(client.userId);
-      if (result && result.gameId) {
-        const game = this.gameManager.getGame(result.gameId);
-        if (game) {
-          const opponentNum = result.playerNumber === 1 ? 2 : 1;
-          const opponent = game.players[opponentNum];
-          if (opponent) {
-            const opponentWs = this.userSockets.get(opponent.id);
-            if (opponentWs) {
-              this.send(opponentWs, { type: 'opponent_disconnected' });
+      // For games that have async storage, don't remove player or end game
+      // Just notify opponent they disconnected - game continues in async mode
+      const gameId = this.gameManager.playerGames.get(client.userId);
+      if (gameId) {
+        const hasAsyncVersion = this.gameToAsync.has(gameId);
+        
+        if (hasAsyncVersion) {
+          // Game is saved to async - don't end it, just notify opponent
+          console.log(`Player ${client.userId} disconnected from async-enabled game ${gameId}`);
+          const game = this.gameManager.getGame(gameId);
+          if (game) {
+            // Find opponent and notify
+            for (const [num, player] of Object.entries(game.players)) {
+              if (player && player.id !== client.userId) {
+                const opponentWs = this.userSockets.get(player.id);
+                if (opponentWs) {
+                  this.send(opponentWs, { type: 'opponent_disconnected' });
+                }
+              }
+            }
+          }
+        } else {
+          // Not async - handle disconnect normally (end game)
+          const result = this.gameManager.handleDisconnect(client.userId);
+          if (result && result.gameId) {
+            const game = this.gameManager.getGame(result.gameId);
+            if (game) {
+              const opponentNum = result.playerNumber === 1 ? 2 : 1;
+              const opponent = game.players[opponentNum];
+              if (opponent) {
+                const opponentWs = this.userSockets.get(opponent.id);
+                if (opponentWs) {
+                  this.send(opponentWs, { type: 'opponent_disconnected' });
+                }
+              }
             }
           }
         }
       }
+
+      // Remove from matchmaking
+      this.gameManager.removeFromMatchmaking(client.userId);
 
       this.userSockets.delete(client.userId);
       this.clients.delete(ws);
@@ -600,9 +627,29 @@ export class WebSocketHandler {
   }
 
   broadcastToGame(gameId, message) {
+    // First try using gameRooms (for rejoined async games)
+    const playersInRoom = this.gameRooms.get(gameId);
+    if (playersInRoom && playersInRoom.size > 0) {
+      console.log(`Broadcasting to game room ${gameId}, ${playersInRoom.size} players`);
+      for (const playerId of playersInRoom) {
+        const ws = this.userSockets.get(playerId);
+        if (ws) {
+          this.send(ws, message);
+        } else {
+          console.log(`No socket found for player ${playerId}`);
+        }
+      }
+      return;
+    }
+    
+    // Fallback to realtime game players (for non-async games)
     const game = this.gameManager.getGame(gameId);
-    if (!game) return;
+    if (!game) {
+      console.log(`No game found for ${gameId}, cannot broadcast`);
+      return;
+    }
 
+    console.log(`Broadcasting to realtime game ${gameId}`);
     for (const num of [1, 2]) {
       if (game.players[num]) {
         const ws = this.userSockets.get(game.players[num].id);
