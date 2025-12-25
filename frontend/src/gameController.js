@@ -958,13 +958,13 @@ export class GameController {
     
     // Set up game state
     this.stateMachine.setState(GameState.PLAYING);
-    // If game is ranked (matchmaking), use ONLINE mode for live play, otherwise ASYNC
-    this.stateMachine.mode = gameState.isRanked ? GameMode.ONLINE : GameMode.ASYNC;
+    // Start in ASYNC mode by default - will switch to ONLINE if both players are present
+    this.stateMachine.mode = GameMode.ASYNC;
     this.stateMachine.gameId = gameId;
     
-    // Reconnect WebSocket if this is a ranked/live game
-    if (gameState.isRanked && !this.wsClient) {
-      console.log('Reconnecting WebSocket for live game');
+    // Always reconnect WebSocket for resumed games to enable presence tracking
+    if (!this.wsClient) {
+      console.log('Reconnecting WebSocket for resumed game');
       this.wsClient = new WebSocketClient(this.config.serverUrl);
       this.setupWebSocketEvents();
       await this.wsClient.connect();
@@ -978,11 +978,12 @@ export class GameController {
       }
       
       // Join the game room
+      console.log('Sending join_game for', gameId);
       this.wsClient.send({ type: 'join_game', gameId });
       
       // Wait a moment for join to complete, then request presence
       setTimeout(() => {
-        console.log('Requesting initial presence update for', gameId);
+        console.log('Join game message sent for', gameId);
       }, 500);
     }
     
