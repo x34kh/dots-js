@@ -733,6 +733,26 @@ export class LobbyUI {
         gap: 10px;
         max-height: 400px;
         overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 10px;
+      }
+      
+      .match-history-list::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      .match-history-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+      }
+      
+      .match-history-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+      }
+      
+      .match-history-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
       }
       
       .match-item {
@@ -823,6 +843,28 @@ export class LobbyUI {
         display: flex;
         flex-direction: column;
         gap: 15px;
+        max-height: 500px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 10px;
+      }
+      
+      .current-games-list::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      .current-games-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+      }
+      
+      .current-games-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+      }
+      
+      .current-games-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
       }
       
       .current-game-item {

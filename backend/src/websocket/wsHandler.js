@@ -597,6 +597,34 @@ export class WebSocketHandler {
           }
         });
       }
+    } else {
+      // No realtime game found - check if it's an async-only game
+      // Look through all game rooms to find which game this user is in
+      for (const [gameId, players] of this.gameRooms.entries()) {
+        if (players.has(client.userId)) {
+          const asyncGame = this.asyncGameManager.games.get(gameId);
+          if (asyncGame && asyncGame.status === 'active') {
+            // Determine winner (the other player)
+            const isPlayer1 = asyncGame.player1Id === client.userId;
+            const winner = isPlayer1 ? 2 : 1;
+            
+            asyncGame.winner = winner;
+            asyncGame.status = 'completed';
+            this.asyncGameManager.endGame(gameId, 'forfeit');
+            console.log(`Ended async-only game ${gameId} due to forfeit, winner: player ${winner}`);
+            
+            // Broadcast game over to both players
+            this.broadcastToGame(gameId, {
+              type: 'game_over',
+              data: {
+                winner: winner,
+                resigned: client.userId
+              }
+            });
+            break;
+          }
+        }
+      }
     }
   }
 
