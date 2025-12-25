@@ -37,7 +37,8 @@ export class AuthService {
         email: payload.email,
         name: payload.name,
         picture: payload.picture,
-        verified: payload.email_verified
+        verified: payload.email_verified,
+        nickname: this.users.get(payload.sub)?.nickname || this.generateUniqueNickname()
       };
 
       // Store/update user
@@ -65,7 +66,8 @@ export class AuthService {
           name: payload.name || 'Developer',
           picture: payload.picture || null,
           verified: true,
-          isDev: true
+          isDev: true,
+          nickname: this.generateUniqueNickname()
         };
         this.users.set(user.id, user);
         return { success: true, user };
@@ -81,7 +83,8 @@ export class AuthService {
       name: 'Developer',
       picture: null,
       verified: true,
-      isDev: true
+      isDev: true,
+      nickname: this.generateUniqueNickname()
     };
     this.users.set(user.id, user);
     return { success: true, user };
@@ -148,7 +151,8 @@ export class AuthService {
       name: username,
       email: null,
       picture: null,
-      isAnonymous: true
+      isAnonymous: true,
+      nickname: username // Anonymous users use their generated name as nickname
     };
 
     this.users.set(anonymousId, user);
@@ -175,12 +179,69 @@ export class AuthService {
       'Panther', 'Hawk', 'Lion', 'Bear', 'Shark', 'Viper', 'Cobra',
       'Raven', 'Knight', 'Warrior', 'Ninja', 'Wizard', 'Ranger'
     ];
-    const numbers = Math.floor(Math.random() * 1000);
+    const numbers = Math.floor(Math.random() * 100); // Two digits
 
     const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
     const noun = nouns[Math.floor(Math.random() * nouns.length)];
 
-    return `${adjective}${noun}${numbers}`;
+    return `${adjective}_${noun}_${numbers.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Generate a unique nickname that doesn't exist yet
+   */
+  generateUniqueNickname() {
+    let nickname;
+    let attempts = 0;
+    const maxAttempts = 100;
+    
+    do {
+      nickname = this.generateRandomUsername();
+      attempts++;
+    } while (this.isNicknameTaken(nickname) && attempts < maxAttempts);
+    
+    if (attempts >= maxAttempts) {
+      // Fallback with timestamp if we can't find unique name
+      nickname = `Player_${Date.now()}_${Math.floor(Math.random() * 100)}`;
+    }
+    
+    return nickname;
+  }
+
+  /**
+   * Check if a nickname is already taken
+   */
+  isNicknameTaken(nickname) {
+    for (const user of this.users.values()) {
+      if (user.nickname === nickname) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Update user nickname
+   */
+  updateNickname(userId, newNickname) {
+    // Validate nickname format (alphanumeric, underscores, 3-20 chars)
+    if (!newNickname || !/^[a-zA-Z0-9_]{3,20}$/.test(newNickname)) {
+      return { success: false, error: 'Invalid nickname format. Use 3-20 characters (letters, numbers, underscores).' };
+    }
+    
+    // Check if nickname is already taken by another user
+    for (const [uid, user] of this.users.entries()) {
+      if (uid !== userId && user.nickname === newNickname) {
+        return { success: false, error: 'Nickname already taken' };
+      }
+    }
+    
+    const user = this.users.get(userId);
+    if (user) {
+      user.nickname = newNickname;
+      return { success: true, user };
+    }
+    return { success: false, error: 'User not found' };
   }
 
   /**

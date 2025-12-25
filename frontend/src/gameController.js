@@ -973,14 +973,15 @@ export class GameController {
       const result = this.boardLogic.occupyDot(move.x, move.y, move.player);
       console.log('occupyDot result:', result);
       if (result.success) {
-        this.renderer.addDot(move.x, move.y, move.player);
+        // Mark the dot as owned visually
+        this.renderer.setDotOwner(move.x, move.y, move.player);
         
+        // Handle captured territories
         if (result.capturedDots && result.capturedDots.length > 0) {
-          for (const capturedDot of result.capturedDots) {
-            this.renderer.addSquare(capturedDot.x, capturedDot.y, move.player);
-            if (move.player === 1) player1Score++;
-            else player2Score++;
-          }
+          this.renderer.setCapturedDots(result.capturedDots, move.player);
+          // Update score based on captured dots
+          if (move.player === 1) player1Score += result.capturedDots.length;
+          else player2Score += result.capturedDots.length;
         }
       } else {
         console.error('Failed to replay move:', move, result);

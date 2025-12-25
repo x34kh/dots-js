@@ -112,11 +112,31 @@ export function createRouter(authService, gameManager, eloService, asyncGameMana
   router.get('/profile/:userId', (req, res) => {
     const stats = eloService.getPlayerStats(req.params.userId);
     const matches = eloService.getMatchHistory(req.params.userId, 10);
+    const user = authService.getUser(req.params.userId);
     
     res.json({
       ...stats,
+      nickname: user?.nickname,
       recentMatches: matches
     });
+  });
+
+  // Update nickname endpoint
+  router.post('/profile/:userId/nickname', authLimiter, (req, res) => {
+    const { nickname } = req.body;
+    const userId = req.params.userId;
+    
+    if (!nickname) {
+      return res.status(400).json({ error: 'Nickname required' });
+    }
+    
+    const result = authService.updateNickname(userId, nickname);
+    
+    if (result.success) {
+      res.json({ nickname: result.user.nickname });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
   });
 
   // Online stats - player counts

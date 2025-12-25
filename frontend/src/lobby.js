@@ -71,6 +71,63 @@ export class LobbyUI {
     this.gamesInterval = setInterval(() => {
       this.loadCurrentGames();
     }, 30000);
+    
+    // Setup nickname editing
+    this.setupNicknameEditor();
+  }
+
+  setupNicknameEditor() {
+    const editBtn = document.getElementById('edit-nickname-btn');
+    const saveBtn = document.getElementById('save-nickname-btn');
+    const cancelBtn = document.getElementById('cancel-nickname-btn');
+    const editor = document.getElementById('nickname-editor');
+    const display = document.getElementById('current-nickname');
+    const input = document.getElementById('nickname-input');
+    
+    if (!editBtn || !saveBtn || !cancelBtn || !editor || !display || !input) return;
+    
+    editBtn.addEventListener('click', () => {
+      input.value = display.textContent;
+      editor.classList.remove('hidden');
+      editBtn.classList.add('hidden');
+      input.focus();
+    });
+    
+    cancelBtn.addEventListener('click', () => {
+      editor.classList.add('hidden');
+      editBtn.classList.remove('hidden');
+    });
+    
+    saveBtn.addEventListener('click', async () => {
+      const newNickname = input.value.trim();
+      if (!newNickname) return;
+      
+      const apiUrl = this.getApiUrl();
+      try {
+        const response = await fetch(`${apiUrl}/api/profile/${this.authState.userId}/nickname`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nickname: newNickname })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          display.textContent = data.nickname;
+          editor.classList.add('hidden');
+          editBtn.classList.remove('hidden');
+          // Update cached profile data
+          if (this.profileData) {
+            this.profileData.nickname = data.nickname;
+          }
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Failed to update nickname');
+        }
+      } catch (error) {
+        console.error('Failed to update nickname:', error);
+        alert('Failed to update nickname');
+      }
+    });
   }
 
   async loadProfile() {
@@ -183,6 +240,16 @@ export class LobbyUI {
                    alt="Profile" class="profile-picture">
               <div class="profile-info">
                 <h2>${this.authState.name}</h2>
+                <div class="nickname-display">
+                  <span class="nickname-label">Nickname:</span>
+                  <span class="nickname-value" id="current-nickname">${this.profileData?.nickname || 'Loading...'}</span>
+                  <button id="edit-nickname-btn" class="btn-edit-nickname">✏️</button>
+                </div>
+                <div class="nickname-editor hidden" id="nickname-editor">
+                  <input type="text" id="nickname-input" maxlength="20" placeholder="Enter nickname" />
+                  <button id="save-nickname-btn" class="btn-save-nickname">Save</button>
+                  <button id="cancel-nickname-btn" class="btn-cancel-nickname">Cancel</button>
+                </div>
                 <div class="elo-display">
                   <span class="elo-label">ELO Rating:</span>
                   <span class="elo-value">${this.profileData?.rating || 1500}</span>

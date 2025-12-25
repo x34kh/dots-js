@@ -141,6 +141,100 @@ body {
   50% { opacity: 0.7; transform: scale(0.98); }
 }
 
+/* Nickname display and editing */
+.nickname-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.nickname-label {
+  color: #888;
+  font-weight: 500;
+}
+
+.nickname-value {
+  color: #00ffff;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.btn-edit-nickname {
+  background: transparent;
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  color: #00ffff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s;
+}
+
+.btn-edit-nickname:hover {
+  border-color: #00ffff;
+  background: rgba(0, 255, 255, 0.1);
+}
+
+.nickname-editor {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+  align-items: center;
+}
+
+.nickname-editor.hidden {
+  display: none;
+}
+
+.nickname-editor input {
+  flex: 1;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.nickname-editor input:focus {
+  outline: none;
+  border-color: #00ffff;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
+
+.btn-save-nickname,
+.btn-cancel-nickname {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.btn-save-nickname {
+  background: linear-gradient(135deg, #00ffff, #0099ff);
+  color: #000;
+}
+
+.btn-save-nickname:hover {
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+}
+
+.btn-cancel-nickname {
+  background: rgba(255, 0, 0, 0.2);
+  color: #ff6666;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+.btn-cancel-nickname:hover {
+  background: rgba(255, 0, 0, 0.3);
+  border-color: #ff6666;
+}
+
 /* Forfeit Button */
 #btn-forfeit {
   position: fixed;
