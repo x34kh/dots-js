@@ -58,6 +58,9 @@ export class GameController {
     try {
       await this.auth.init();
       
+      // Update UI to show Google login button if not signed in
+      this.updateUserDisplay();
+      
       // Set up auth event handlers for auto-login/lobby
       this.auth.on('signIn', async (data) => {
         console.log('User signed in:', data.user.name);
@@ -87,6 +90,8 @@ export class GameController {
       }
     } catch (error) {
       console.warn('Google Auth not available:', error);
+      // Still update display to show Google login button if configured
+      this.updateUserDisplay();
     }
 
     // Check for join parameters
@@ -572,13 +577,19 @@ export class GameController {
   updateUserDisplay() {
     const userInfoEl = document.getElementById('user-info');
     const userNameEl = document.getElementById('user-name');
+    const googleLoginBtn = document.getElementById('btn-google-login');
     
     if (this.auth.isSignedIn() || this.auth.isAnonymous()) {
       const user = this.auth.getUser();
       userNameEl.textContent = user.isAnonymous ? `🎭 ${user.name}` : user.name;
       userInfoEl.classList.remove('hidden');
+      googleLoginBtn.classList.add('hidden');
     } else {
       userInfoEl.classList.add('hidden');
+      // Show Google login button only if Google auth is configured
+      if (this.config.googleClientId) {
+        googleLoginBtn.classList.remove('hidden');
+      }
     }
   }
 
