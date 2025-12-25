@@ -1597,8 +1597,9 @@ export class GameController {
     p1Card.classList.add('player1');
     p2Card.classList.add('player2');
     
-    p1Card.querySelector('.player-name').textContent = this.stateMachine.players[1].name;
-    p2Card.querySelector('.player-name').textContent = this.stateMachine.players[2].name;
+    // Use nickname if available, otherwise use name
+    p1Card.querySelector('.player-name').textContent = this.stateMachine.players[1].nickname || this.stateMachine.players[1].name;
+    p2Card.querySelector('.player-name').textContent = this.stateMachine.players[2].nickname || this.stateMachine.players[2].name;
     
     // Update player card colors based on their skins
     const p1SkinInfo = skinManager.getPlayerSkinInfo(1);

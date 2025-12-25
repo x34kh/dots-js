@@ -86,6 +86,7 @@ export class WebSocketHandler {
         data: {
           userId: result.user.id,
           name: result.user.name,
+          nickname: result.user.nickname,
           picture: result.user.picture
         }
       });
@@ -156,6 +157,7 @@ export class WebSocketHandler {
 
     const result = this.gameManager.createGame(client.userId, {
       name: client.user.name,
+      nickname: client.user.nickname,
       picture: client.user.picture
     });
 
@@ -181,6 +183,7 @@ export class WebSocketHandler {
 
     const result = this.gameManager.joinGame(gameId, client.userId, {
       name: client.user.name,
+      nickname: client.user.nickname,
       picture: client.user.picture
     });
 
@@ -508,8 +511,9 @@ export class WebSocketHandler {
     try {
       const player1Id = game.players[1].id;
       const player2Id = game.players[2].id;
-      const player1Name = game.players[1].name || 'Player 1';
-      const player2Name = game.players[2].name || 'Player 2';
+      // Use nickname if available, fallback to name
+      const player1Name = game.players[1].nickname || game.players[1].name || 'Player 1';
+      const player2Name = game.players[2].nickname || game.players[2].name || 'Player 2';
       
       // Create async game with same grid size as realtime game
       const asyncGame = this.asyncGameManager.createGame(
