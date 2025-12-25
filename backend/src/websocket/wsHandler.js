@@ -445,15 +445,22 @@ export class WebSocketHandler {
     console.log(`Game ${gameId} presence:`, {
       player1Id,
       player2Id,
-      playersInRoom: Array.from(playersInRoom)
+      player1IdType: typeof player1Id,
+      player2IdType: typeof player2Id,
+      playersInRoom: Array.from(playersInRoom),
+      playersInRoomTypes: Array.from(playersInRoom).map(id => typeof id)
     });
     
+    // Ensure IDs are strings for comparison (Google IDs are strings)
+    const player1IdStr = String(player1Id);
+    const player2IdStr = String(player2Id);
+    
     const presence = {
-      player1Online: player1Id ? playersInRoom.has(player1Id) : false,
-      player2Online: player2Id ? playersInRoom.has(player2Id) : false
+      player1Online: player1Id ? playersInRoom.has(player1IdStr) : false,
+      player2Online: player2Id ? playersInRoom.has(player2IdStr) : false
     };
     
-    console.log('Broadcasting presence update:', { gameId, presence, player1Id, player2Id });
+    console.log('Broadcasting presence update:', { gameId, presence, player1Id: player1IdStr, player2Id: player2IdStr });
     
     this.broadcastToGame(gameId, {
       type: 'presence_update',
