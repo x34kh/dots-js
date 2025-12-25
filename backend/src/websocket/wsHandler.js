@@ -287,6 +287,7 @@ export class WebSocketHandler {
 
     const result = this.gameManager.addToMatchmaking(client.userId, {
       name: client.user.name,
+      nickname: client.user.nickname,
       picture: client.user.picture
     }, isRanked);
 
