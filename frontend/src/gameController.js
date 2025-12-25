@@ -948,6 +948,9 @@ export class GameController {
     this.boardLogic.reset();
     this.renderer.reset();
     
+    // Ensure canvas is properly sized
+    this.renderer.onResize();
+    
     let player1Score = 0;
     let player2Score = 0;
     
@@ -956,14 +959,14 @@ export class GameController {
     console.log('Moves array:', JSON.stringify(gameState.moves));
     for (const move of gameState.moves) {
       console.log('Replaying move:', move);
-      const result = this.boardLogic.placeDot(move.x, move.y, move.player);
-      console.log('placeDot result:', result);
-      if (result.valid) {
+      const result = this.boardLogic.occupyDot(move.x, move.y, move.player);
+      console.log('occupyDot result:', result);
+      if (result.success) {
         this.renderer.addDot(move.x, move.y, move.player);
         
-        if (result.captures && result.captures.length > 0) {
-          for (const capture of result.captures) {
-            this.renderer.addSquare(capture.x, capture.y, move.player);
+        if (result.capturedDots && result.capturedDots.length > 0) {
+          for (const capturedDot of result.capturedDots) {
+            this.renderer.addSquare(capturedDot.x, capturedDot.y, move.player);
             if (move.player === 1) player1Score++;
             else player2Score++;
           }
@@ -1097,9 +1100,10 @@ export class GameController {
       }
     }
     
-    // Clear any visual previews
+    // Clear any visual previews and pulsing effect
     if (this.renderer) {
       this.renderer.clearPreviews();
+      this.renderer.clearPendingDotPulse();
       
       // Clear hover state
       if (this.renderer.hoverDot) {
@@ -1159,15 +1163,17 @@ export class GameController {
     if (dot && this.renderer.isDotMeshClickable(dot)) {
       const { gridX, gridY } = dot.userData;
       
-      // Clear previous preview
+      // Clear previous pending move visual effects
       this.renderer.clearPreviews();
+      this.renderer.clearPendingDotPulse();
       if (this.renderer.hoverDot) {
         const prevData = this.renderer.hoverDot.userData;
         this.renderer.setDotHoverTarget(prevData.gridX, prevData.gridY, false);
       }
       
-      // Show hover effect like mouse (magnify dot)
+      // Show hover effect and start pulsing for pending confirmation
       this.renderer.setDotHoverTarget(gridX, gridY, true, playerNum);
+      this.renderer.setPendingDotPulse(gridX, gridY, playerNum);
       
       // Preview territory capture
       const previewDots = this.boardLogic.previewCapture(gridX, gridY, playerNum);
@@ -1192,12 +1198,15 @@ export class GameController {
     
     const { gridX, gridY, playerNum } = this.pendingMove;
     
+    // Clear pulsing effect and previews
+    this.renderer.clearPendingDotPulse();
+    this.renderer.clearPreviews();
+    
     // Execute the move
     this.makeMove(gridX, gridY, playerNum);
     
     // Clear pending move and disable button
     this.pendingMove = null;
-    this.renderer.clearPreviews();
     if (this.renderer.hoverDot) {
       const prevData = this.renderer.hoverDot.userData;
       this.renderer.setDotHoverTarget(prevData.gridX, prevData.gridY, false);

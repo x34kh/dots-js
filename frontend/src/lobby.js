@@ -316,7 +316,7 @@ export class LobbyUI {
       return `
         <div class="current-game-item ${turnClass}" data-game-id="${game.id}">
           <div class="game-status">
-            <span class="turn-indicator">${turnText}</span>
+            <span class="game-turn-status">${turnText}</span>
             ${rankedBadge}
           </div>
           <div class="game-opponent">

@@ -31,6 +31,10 @@ export class GameRenderer {
     this.dotAnimations = new Map(); // key: "x,y", value: { targetScale, targetEmissive, currentScale, currentEmissive }
     this.animationSpeed = 0.15; // Smooth transition speed
     
+    // Pulsing animation for pending moves
+    this.pulsingDot = null; // key: "x,y"
+    this.pulseTime = 0;
+    
     // Use skin manager for player colors
     this.playerColors = skinManager.getPlayerColors();
     
@@ -973,9 +977,47 @@ export class GameRenderer {
   }
 
   /**
+   * Set a dot to have a pulsing animation (for pending touch moves)
+   */
+  setPendingDotPulse(x, y, playerNum = null) {
+    const key = `${x},${y}`;
+    this.pulsingDot = playerNum ? key : null;
+    this.pulseTime = 0;
+    
+    // Set initial hover state
+    if (playerNum) {
+      this.setDotHoverTarget(x, y, true, playerNum);
+    }
+  }
+
+  /**
+   * Clear pulsing animation
+   */
+  clearPendingDotPulse() {
+    if (this.pulsingDot) {
+      const [x, y] = this.pulsingDot.split(',').map(Number);
+      this.setDotHoverTarget(x, y, false);
+      this.pulsingDot = null;
+    }
+  }
+
+  /**
    * Update all dot animations for smooth transitions
    */
   updateDotAnimations() {
+    // Update pulse animation for pending move
+    if (this.pulsingDot) {
+      this.pulseTime += 0.05;
+      const pulseScale = 1.0 + Math.sin(this.pulseTime * 3) * 0.15; // Pulse between 0.85 and 1.15
+      const pulseIntensity = 0.8 + Math.sin(this.pulseTime * 3) * 0.2; // Pulse emissive
+      
+      const anim = this.dotAnimations.get(this.pulsingDot);
+      if (anim) {
+        anim.targetScale = 1.4 * pulseScale;
+        anim.targetEmissiveIntensity = pulseIntensity;
+      }
+    }
+    
     for (const [key, anim] of this.dotAnimations) {
       const mesh = this.dotMeshes.get(key);
       if (!mesh) continue;
