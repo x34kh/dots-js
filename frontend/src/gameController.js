@@ -960,7 +960,7 @@ export class GameController {
     this.renderer.reset();
     
     // Ensure canvas is properly sized
-    this.renderer.onResize();
+    this.renderer.handleResize();
     
     let player1Score = 0;
     let player2Score = 0;
