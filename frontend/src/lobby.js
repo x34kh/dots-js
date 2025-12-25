@@ -245,7 +245,7 @@ export class LobbyUI {
                 <h2>${this.authState.name}</h2>
                 <div class="nickname-display">
                   <span class="nickname-label">Nickname:</span>
-                  <span class="nickname-value" id="current-nickname">${this.profileData?.nickname || 'Loading...'}</span>
+                  <span class="nickname-value" id="current-nickname">${this.profileData?.nickname || this.authState.name || 'Player'}</span>
                   <button id="edit-nickname-btn" class="btn-edit-nickname">✏️</button>
                 </div>
                 <div class="nickname-editor hidden" id="nickname-editor">

@@ -114,9 +114,19 @@ export function createRouter(authService, gameManager, eloService, asyncGameMana
     const matches = eloService.getMatchHistory(req.params.userId, 10);
     const user = authService.getUser(req.params.userId);
     
+    // If user doesn't exist or doesn't have a nickname, generate one
+    let nickname = user?.nickname;
+    if (!nickname) {
+      nickname = authService.generateUniqueNickname();
+      // Store it if user exists
+      if (user) {
+        user.nickname = nickname;
+      }
+    }
+    
     res.json({
       ...stats,
-      nickname: user?.nickname,
+      nickname: nickname,
       recentMatches: matches
     });
   });

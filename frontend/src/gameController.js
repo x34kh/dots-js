@@ -931,8 +931,24 @@ export class GameController {
     
     // Set up game state
     this.stateMachine.setState(GameState.PLAYING);
-    this.stateMachine.mode = GameMode.ASYNC; // Use async mode for continued games
+    // If game is ranked (matchmaking), use ONLINE mode for live play, otherwise ASYNC
+    this.stateMachine.mode = gameState.isRanked ? GameMode.ONLINE : GameMode.ASYNC;
     this.stateMachine.gameId = gameId;
+    
+    // Reconnect WebSocket if this is a ranked/live game
+    if (gameState.isRanked && !this.wsClient) {
+      console.log('Reconnecting WebSocket for live game');
+      this.wsClient = new WebSocketClient(this.config.serverUrl);
+      this.setupWebSocketEvents();
+      await this.wsClient.connect();
+      
+      // Authenticate and join game room
+      const authToken = this.auth.getToken() || this.auth.getAnonymousAuthData();
+      this.wsClient.send('authenticate', authToken);
+      
+      // Join the game room
+      this.wsClient.send('join_game', { gameId });
+    }
     
     // Determine which player we are
     const userId = this.auth.user?.sub || this.auth.user?.id;
