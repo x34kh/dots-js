@@ -826,21 +826,21 @@ export class GameController {
       
       // If both players are online and we're in ASYNC mode, switch to ONLINE
       if (data.player1Online && data.player2Online && 
-          this.stateMachine.mode === 'ASYNC') {
+          this.stateMachine.mode === GameMode.ASYNC) {
         console.log('Both players online, switching from ASYNC to ONLINE mode');
-        this.stateMachine.mode = 'ONLINE';
+        this.stateMachine.mode = GameMode.ONLINE;
         notificationManager.show('Opponent joined - Now playing in real-time!', 'success');
       }
       
       // If opponent left and we're in ONLINE mode, switch back to ASYNC
-      if (this.stateMachine.mode === 'ONLINE') {
+      if (this.stateMachine.mode === GameMode.ONLINE) {
         const myPlayerNum = this.stateMachine.localPlayerId;
         const opponentNum = myPlayerNum === 1 ? 2 : 1;
         const opponentOnline = opponentNum === 1 ? data.player1Online : data.player2Online;
         
         if (!opponentOnline) {
           console.log('Opponent left, switching from ONLINE to ASYNC mode');
-          this.stateMachine.mode = 'ASYNC';
+          this.stateMachine.mode = GameMode.ASYNC;
           notificationManager.show('Opponent disconnected - Switched to turn-based mode', 'info');
         }
       }
