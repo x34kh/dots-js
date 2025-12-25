@@ -12,6 +12,7 @@ export class WebSocketHandler {
     this.clients = new Map(); // ws -> { userId, user }
     this.userSockets = new Map(); // userId -> ws
     this.gameToAsync = new Map(); // realtime gameId -> async gameId
+    this.gameRooms = new Map(); // gameId -> Set of userIds
 
     this.setupServer();
   }
