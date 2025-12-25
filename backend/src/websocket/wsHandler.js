@@ -519,6 +519,20 @@ export class WebSocketHandler {
 
         // Handle game over
         if (result.gameOver) {
+          // End the async game if it exists
+          const asyncGameId = this.gameToAsync.get(result.gameId);
+          if (asyncGameId) {
+            const asyncGame = this.asyncGameManager.games.get(asyncGameId);
+            if (asyncGame && asyncGame.status === 'active') {
+              // Sync final scores
+              asyncGame.scores = { ...game.scores };
+              asyncGame.winner = game.winner;
+              asyncGame.status = 'completed';
+              this.asyncGameManager.endGame(asyncGameId, 'completed');
+              console.log(`Ended async game ${asyncGameId} with final scores:`, asyncGame.scores);
+            }
+          }
+          
           this.broadcastToGame(result.gameId, {
             type: 'game_over',
             data: {
@@ -790,6 +804,17 @@ export class WebSocketHandler {
     console.log(`Syncing move to async storage: gameId=${asyncGameId}, x=${x}, y=${y}, userId=${userId}`);
     try {
       const result = this.asyncGameManager.makeMove(asyncGameId, userId, x, y);
+      
+      // Sync the actual scores from the realtime game
+      const realtimeGame = this.gameManager.getGame(realtimeGameId);
+      if (realtimeGame && realtimeGame.scores) {
+        const asyncGame = this.asyncGameManager.games.get(asyncGameId);
+        if (asyncGame) {
+          asyncGame.scores = { ...realtimeGame.scores };
+          console.log('Synced scores from realtime to async:', asyncGame.scores);
+        }
+      }
+      
       console.log('Async sync result:', result);
     } catch (error) {
       console.error('Failed to sync move to async storage:', error);

@@ -735,6 +735,8 @@ export class LobbyUI {
         overflow-y: auto;
         overflow-x: hidden;
         padding-right: 10px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
       }
       
       .match-history-list::-webkit-scrollbar {
@@ -847,6 +849,8 @@ export class LobbyUI {
         overflow-y: auto;
         overflow-x: hidden;
         padding-right: 10px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
       }
       
       .current-games-list::-webkit-scrollbar {
