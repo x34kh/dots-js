@@ -916,6 +916,9 @@ export class GameController {
     // Update renderer colors to match current skin selections
     this.renderer.updateSkinColors();
     
+    // Ensure canvas is properly sized and rendered
+    this.renderer.handleResize();
+    
     console.log('localPlayerId AFTER reset:', this.stateMachine.localPlayerId);
     console.log('currentPlayer AFTER reset:', this.stateMachine.currentPlayer);
     
@@ -967,24 +970,43 @@ export class GameController {
       console.log('Reconnecting WebSocket for resumed game');
       this.wsClient = new WebSocketClient(this.config.serverUrl);
       this.setupWebSocketEvents();
+      
+      // Wait for connection and authentication
       await this.wsClient.connect();
       
-      // Authenticate and join game room
-      const authToken = this.auth.getToken() || this.auth.getAnonymousAuthData();
-      if (typeof authToken === 'string') {
-        this.wsClient.send({ type: 'auth', token: authToken });
-      } else {
-        this.wsClient.send({ type: 'auth_anonymous', ...authToken });
-      }
+      console.log('WebSocket connected, authenticating...');
       
-      // Join the game room
+      // Create a promise that resolves when authenticated
+      const authPromise = new Promise((resolve) => {
+        const authHandler = (data) => {
+          console.log('Authentication confirmed for user:', data.userId);
+          resolve();
+        };
+        
+        // Add one-time handler
+        this.wsClient.on('authenticated', authHandler);
+        
+        // Send auth message
+        const authToken = this.auth.getToken() || this.auth.getAnonymousAuthData();
+        if (typeof authToken === 'string') {
+          this.wsClient.send({ type: 'auth', token: authToken });
+        } else {
+          this.wsClient.send({ type: 'auth_anonymous', ...authToken });
+        }
+        
+        // Add timeout in case auth fails
+        setTimeout(() => {
+          console.log('Auth timeout, proceeding anyway...');
+          resolve();
+        }, 2000);
+      });
+      
+      // Wait for authentication to complete
+      await authPromise;
+      
+      // Now join the game room
       console.log('Sending join_game for', gameId);
       this.wsClient.send({ type: 'join_game', gameId });
-      
-      // Wait a moment for join to complete, then request presence
-      setTimeout(() => {
-        console.log('Join game message sent for', gameId);
-      }, 500);
     }
     
     // Determine which player we are
