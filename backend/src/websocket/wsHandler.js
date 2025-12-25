@@ -420,21 +420,33 @@ export class WebSocketHandler {
       return;
     }
     
-    const game = this.gameManager.getGameInfo(gameId);
-    if (!game) {
-      console.log(`No game found for ${gameId}`);
-      return;
+    // Try to get game from realtime manager first
+    let game = this.gameManager.getGameInfo(gameId);
+    let player1Id, player2Id;
+    
+    if (game) {
+      // Game is in realtime manager
+      player1Id = game.players[1]?.id || game.players[1]?.userId;
+      player2Id = game.players[2]?.id || game.players[2]?.userId;
+    } else {
+      // Check async manager
+      const asyncGame = this.asyncGameManager.games.get(gameId);
+      if (asyncGame) {
+        console.log(`Broadcasting presence for async game ${gameId}`);
+        player1Id = asyncGame.player1Id;
+        player2Id = asyncGame.player2Id;
+      } else {
+        console.log(`No game found for ${gameId} in either manager`);
+        return;
+      }
     }
     
     // Debug logging
-    console.log(`Game ${gameId} players:`, {
-      player1: game.players[1],
-      player2: game.players[2],
+    console.log(`Game ${gameId} presence:`, {
+      player1Id,
+      player2Id,
       playersInRoom: Array.from(playersInRoom)
     });
-    
-    const player1Id = game.players[1]?.id || game.players[1]?.userId;
-    const player2Id = game.players[2]?.id || game.players[2]?.userId;
     
     const presence = {
       player1Online: player1Id ? playersInRoom.has(player1Id) : false,
