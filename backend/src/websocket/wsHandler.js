@@ -54,6 +54,9 @@ export class WebSocketHandler {
       case 'join_game':
         this.handleJoinGame(ws, message.gameId);
         break;
+      case 'leave_game':
+        this.handleLeaveGame(ws, message.gameId);
+        break;
       case 'find_match':
         this.handleFindMatch(ws, message.isRanked);
         break;
@@ -181,11 +184,32 @@ export class WebSocketHandler {
       return;
     }
 
-    const result = this.gameManager.joinGame(gameId, client.userId, {
+    // Try to join or rejoin the game
+    let result = this.gameManager.joinGame(gameId, client.userId, {
       name: client.user.name,
       nickname: client.user.nickname,
       picture: client.user.picture
     });
+
+    // If game is already playing, player might be rejoining
+    if (!result.success && result.error === 'Game already started or finished') {
+      const game = this.gameManager.getGameInfo(gameId);
+      if (game) {
+        // Check if this user is one of the players
+        const isPlayer1 = game.players[1]?.id === client.userId;
+        const isPlayer2 = game.players[2]?.id === client.userId;
+        
+        if (isPlayer1 || isPlayer2) {
+          // Player is rejoining - allow it
+          result = {
+            success: true,
+            gameId,
+            playerNumber: isPlayer1 ? 1 : 2,
+            game
+          };
+        }
+      }
+    }
 
     if (result.success) {
       // Add player to game room
@@ -193,6 +217,8 @@ export class WebSocketHandler {
         this.gameRooms.set(gameId, new Set());
       }
       this.gameRooms.get(gameId).add(client.userId);
+      
+      console.log(`Player ${client.userId} joined/rejoined game ${gameId} as player ${result.playerNumber}`);
       
       this.send(ws, {
         type: 'game_joined',
@@ -202,7 +228,7 @@ export class WebSocketHandler {
         }
       });
 
-      // Notify both players game is starting
+      // Notify both players game is starting (for new games)
       const game = result.game;
       if (game && game.status === 'playing') {
         // Save game to async storage so it can be resumed
@@ -223,6 +249,31 @@ export class WebSocketHandler {
       this.broadcastPresenceUpdate(gameId);
     } else {
       this.sendError(ws, result.error);
+    }
+  }
+
+  handleLeaveGame(ws, gameId) {
+    const client = this.clients.get(ws);
+    if (!client) {
+      return;
+    }
+
+    console.log(`Player ${client.userId} leaving game ${gameId}`);
+    
+    // Remove from game room
+    const playersInRoom = this.gameRooms.get(gameId);
+    if (playersInRoom) {
+      playersInRoom.delete(client.userId);
+      console.log(`Removed player from room. Remaining players:`, Array.from(playersInRoom));
+      
+      // Broadcast updated presence
+      this.broadcastPresenceUpdate(gameId);
+      
+      // Clean up empty rooms
+      if (playersInRoom.size === 0) {
+        this.gameRooms.delete(gameId);
+        console.log(`Deleted empty room ${gameId}`);
+      }
     }
   }
 
@@ -319,17 +370,33 @@ export class WebSocketHandler {
 
   broadcastPresenceUpdate(gameId) {
     const playersInRoom = this.gameRooms.get(gameId);
-    if (!playersInRoom) return;
+    if (!playersInRoom) {
+      console.log(`No room found for game ${gameId}`);
+      return;
+    }
     
     const game = this.gameManager.getGameInfo(gameId);
-    if (!game) return;
+    if (!game) {
+      console.log(`No game found for ${gameId}`);
+      return;
+    }
+    
+    // Debug logging
+    console.log(`Game ${gameId} players:`, {
+      player1: game.players[1],
+      player2: game.players[2],
+      playersInRoom: Array.from(playersInRoom)
+    });
+    
+    const player1Id = game.players[1]?.id || game.players[1]?.userId;
+    const player2Id = game.players[2]?.id || game.players[2]?.userId;
     
     const presence = {
-      player1Online: playersInRoom.has(game.players[1]?.id),
-      player2Online: playersInRoom.has(game.players[2]?.id)
+      player1Online: player1Id ? playersInRoom.has(player1Id) : false,
+      player2Online: player2Id ? playersInRoom.has(player2Id) : false
     };
     
-    console.log('Broadcasting presence update for game', gameId, presence);
+    console.log('Broadcasting presence update:', { gameId, presence, player1Id, player2Id });
     
     this.broadcastToGame(gameId, {
       type: 'presence_update',

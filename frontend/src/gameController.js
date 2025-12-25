@@ -1060,10 +1060,16 @@ export class GameController {
     
     console.log('Returning to lobby, game will be preserved');
     
-    // Disconnect WebSocket if in online mode (game is saved in async storage)
-    if (this.wsClient) {
-      this.wsClient.disconnect();
-      this.wsClient = null;
+    // Notify backend we're leaving the game room before disconnecting
+    if (this.wsClient && this.stateMachine.gameId) {
+      this.wsClient.send('leave_game', { gameId: this.stateMachine.gameId });
+      // Give it a moment to send before disconnecting
+      setTimeout(() => {
+        if (this.wsClient) {
+          this.wsClient.disconnect();
+          this.wsClient = null;
+        }
+      }, 100);
     }
     
     // Reset game started flag
