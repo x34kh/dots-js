@@ -225,6 +225,9 @@ export class LobbyUI {
       return;
     }
     
+    // Make lobby visible
+    container.classList.remove('hidden');
+    
     container.innerHTML = `
       <div class="lobby-container">
         <div class="lobby-header">
@@ -555,7 +558,17 @@ export class LobbyUI {
   }
 
   hide() {
-    // Cleanup if needed
+    // Hide lobby container
+    const container = document.getElementById('lobby-container');
+    if (container) {
+      container.classList.add('hidden');
+    }
+    
+    // Cleanup polling interval
+    if (this.gamesInterval) {
+      clearInterval(this.gamesInterval);
+      this.gamesInterval = null;
+    }
   }
 
   addStyles() {
