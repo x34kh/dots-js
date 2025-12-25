@@ -188,6 +188,12 @@ export class WebSocketHandler {
     });
 
     if (result.success) {
+      // Add player to game room
+      if (!this.gameRooms.has(gameId)) {
+        this.gameRooms.set(gameId, new Set());
+      }
+      this.gameRooms.get(gameId).add(client.userId);
+      
       this.send(ws, {
         type: 'game_joined',
         data: {
@@ -212,6 +218,9 @@ export class WebSocketHandler {
           }
         });
       }
+      
+      // Notify about player presence
+      this.broadcastPresenceUpdate(gameId);
     } else {
       this.sendError(ws, result.error);
     }
@@ -306,6 +315,26 @@ export class WebSocketHandler {
     for (const ws of this.clients.keys()) {
       this.send(ws, message);
     }
+  }
+
+  broadcastPresenceUpdate(gameId) {
+    const playersInRoom = this.gameRooms.get(gameId);
+    if (!playersInRoom) return;
+    
+    const game = this.gameManager.getGameInfo(gameId);
+    if (!game) return;
+    
+    const presence = {
+      player1Online: playersInRoom.has(game.players[1]?.id),
+      player2Online: playersInRoom.has(game.players[2]?.id)
+    };
+    
+    console.log('Broadcasting presence update for game', gameId, presence);
+    
+    this.broadcastToGame(gameId, {
+      type: 'presence_update',
+      data: presence
+    });
   }
 
   handleMove(ws, move) {
@@ -451,6 +480,17 @@ export class WebSocketHandler {
     const client = this.clients.get(ws);
     if (client) {
       console.log('Client disconnected:', client.userId);
+
+      // Remove from game rooms and notify
+      for (const [gameId, players] of this.gameRooms.entries()) {
+        if (players.has(client.userId)) {
+          players.delete(client.userId);
+          this.broadcastPresenceUpdate(gameId);
+          if (players.size === 0) {
+            this.gameRooms.delete(gameId);
+          }
+        }
+      }
 
       // Notify opponent
       const result = this.gameManager.handleDisconnect(client.userId);

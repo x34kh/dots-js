@@ -210,8 +210,9 @@ export class WebSocketClient {
         break;
       case 'queue_stats':
         this.emit('queue_stats', message.data);
-        break;
-      default:
+        break;      case 'presence_update':
+        this.emit('presenceUpdate', message.data);
+        break;      default:
         console.warn('Unknown message type:', message.type);
     }
   }

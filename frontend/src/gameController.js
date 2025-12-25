@@ -819,6 +819,33 @@ export class GameController {
       console.log('ELO updated:', data);
     });
 
+    this.wsClient.on('presenceUpdate', (data) => {
+      console.log('Presence update received:', data);
+      this.updatePlayerPresence(1, data.player1Online);
+      this.updatePlayerPresence(2, data.player2Online);
+      
+      // If both players are online and we're in ASYNC mode, switch to ONLINE
+      if (data.player1Online && data.player2Online && 
+          this.stateMachine.mode === 'ASYNC') {
+        console.log('Both players online, switching from ASYNC to ONLINE mode');
+        this.stateMachine.mode = 'ONLINE';
+        notificationManager.show('Opponent joined - Now playing in real-time!', 'success');
+      }
+      
+      // If opponent left and we're in ONLINE mode, switch back to ASYNC
+      if (this.stateMachine.mode === 'ONLINE') {
+        const myPlayerNum = this.stateMachine.localPlayerId;
+        const opponentNum = myPlayerNum === 1 ? 2 : 1;
+        const opponentOnline = opponentNum === 1 ? data.player1Online : data.player2Online;
+        
+        if (!opponentOnline) {
+          console.log('Opponent left, switching from ONLINE to ASYNC mode');
+          this.stateMachine.mode = 'ASYNC';
+          notificationManager.show('Opponent disconnected - Switched to turn-based mode', 'info');
+        }
+      }
+    });
+
     this.wsClient.on('error', (error) => {
       console.error('Server error:', error);
     });
@@ -1597,6 +1624,10 @@ export class GameController {
     p1Card.classList.add('player1');
     p2Card.classList.add('player2');
     
+    // Debug: Log player data to see if nickname exists
+    console.log('Player 1 data:', this.stateMachine.players[1]);
+    console.log('Player 2 data:', this.stateMachine.players[2]);
+    
     // Use nickname if available, otherwise use name
     p1Card.querySelector('.player-name').textContent = this.stateMachine.players[1].nickname || this.stateMachine.players[1].name;
     p2Card.querySelector('.player-name').textContent = this.stateMachine.players[2].nickname || this.stateMachine.players[2].name;
@@ -1611,6 +1642,10 @@ export class GameController {
     // Also update score displays to ensure they reflect current state
     this.updateScoreDisplay(1, this.stateMachine.players[1].score);
     this.updateScoreDisplay(2, this.stateMachine.players[2].score);
+    
+    // Initialize presence indicators (set to offline by default)
+    this.updatePlayerPresence(1, false);
+    this.updatePlayerPresence(2, false);
     
     this.updateTurnIndicator(this.stateMachine.currentPlayer);
   }
@@ -1650,6 +1685,24 @@ export class GameController {
   updateScoreDisplay(playerNum, score) {
     const card = document.getElementById(`player${playerNum}-card`);
     card.querySelector('.player-score').textContent = score;
+  }
+
+  updatePlayerPresence(playerNum, isOnline) {
+    const presenceEl = document.getElementById(`player${playerNum}-presence`);
+    if (!presenceEl) return;
+    
+    presenceEl.classList.remove('online', 'offline', 'playing');
+    
+    if (isOnline) {
+      // Check if it's their turn to show "playing" state
+      if (this.stateMachine.currentPlayer === playerNum) {
+        presenceEl.classList.add('playing');
+      } else {
+        presenceEl.classList.add('online');
+      }
+    } else {
+      presenceEl.classList.add('offline');
+    }
   }
 
   animate() {

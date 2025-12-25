@@ -45,6 +45,7 @@ body {
 }
 
 .player-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -55,6 +56,37 @@ body {
   backdrop-filter: blur(10px);
   pointer-events: auto;
   min-width: 120px;
+}
+
+/* Player presence indicator */
+.player-presence {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.5);
+}
+
+.player-presence.online {
+  background: #00ff00;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.player-presence.offline {
+  background: #666;
+}
+
+.player-presence.playing {
+  background: #ffaa00;
+  box-shadow: 0 0 10px rgba(255, 170, 0, 0.5);
+  animation: pulse-playing 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-playing {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 #player1-card {
