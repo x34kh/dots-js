@@ -996,9 +996,9 @@ export class GameController {
         
         // Add timeout in case auth fails
         setTimeout(() => {
-          console.log('Auth timeout, proceeding anyway...');
+          console.log('Auth timeout after 5s, proceeding anyway...');
           resolve();
-        }, 2000);
+        }, 5000);
       });
       
       // Wait for authentication to complete

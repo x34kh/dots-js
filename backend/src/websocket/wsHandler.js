@@ -185,12 +185,44 @@ export class WebSocketHandler {
       return;
     }
 
-    // Try to join or rejoin the game
+    // Try to join or rejoin the game in realtime gameManager
     let result = this.gameManager.joinGame(gameId, client.userId, {
       name: client.user.name,
       nickname: client.user.nickname,
       picture: client.user.picture
     });
+
+    // If game not found in realtime, check if it's an async game
+    if (!result.success && result.error === 'Game not found') {
+      console.log(`Game ${gameId} not in realtime manager, checking async...`);
+      
+      // Get async game state
+      const asyncGame = this.asyncGameManager.games.get(gameId);
+      if (asyncGame) {
+        console.log(`Found async game ${gameId}, creating room for presence tracking`);
+        
+        // Determine player number
+        const isPlayer1 = asyncGame.player1Id === client.userId;
+        const isPlayer2 = asyncGame.player2Id === client.userId;
+        
+        if (isPlayer1 || isPlayer2) {
+          result = {
+            success: true,
+            gameId,
+            playerNumber: isPlayer1 ? 1 : 2,
+            game: {
+              players: {
+                1: { id: asyncGame.player1Id, name: asyncGame.player1Name, nickname: asyncGame.player1Nickname },
+                2: { id: asyncGame.player2Id, name: asyncGame.player2Name, nickname: asyncGame.player2Nickname }
+              }
+            }
+          };
+        } else {
+          this.sendError(ws, 'Not a player in this game');
+          return;
+        }
+      }
+    }
 
     // If game is already playing, player might be rejoining
     if (!result.success && result.error === 'Game already started or finished') {
@@ -229,7 +261,7 @@ export class WebSocketHandler {
         }
       });
 
-      // Notify both players game is starting (for new games)
+      // Notify both players game is starting (for new games only)
       const game = result.game;
       if (game && game.status === 'playing') {
         // Save game to async storage so it can be resumed
