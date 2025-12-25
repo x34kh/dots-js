@@ -971,10 +971,14 @@ export class GameController {
       
       // Authenticate and join game room
       const authToken = this.auth.getToken() || this.auth.getAnonymousAuthData();
-      this.wsClient.send('authenticate', authToken);
+      if (typeof authToken === 'string') {
+        this.wsClient.send({ type: 'auth', token: authToken });
+      } else {
+        this.wsClient.send({ type: 'auth_anonymous', ...authToken });
+      }
       
       // Join the game room
-      this.wsClient.send('join_game', { gameId });
+      this.wsClient.send({ type: 'join_game', gameId });
     }
     
     // Determine which player we are
@@ -1062,7 +1066,7 @@ export class GameController {
     
     // Notify backend we're leaving the game room before disconnecting
     if (this.wsClient && this.stateMachine.gameId) {
-      this.wsClient.send('leave_game', { gameId: this.stateMachine.gameId });
+      this.wsClient.send({ type: 'leave_game', gameId: this.stateMachine.gameId });
       // Give it a moment to send before disconnecting
       setTimeout(() => {
         if (this.wsClient) {
