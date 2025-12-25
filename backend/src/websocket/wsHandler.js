@@ -620,8 +620,10 @@ export class WebSocketHandler {
       const player1Id = game.players[1].id;
       const player2Id = game.players[2].id;
       // Use nickname if available, fallback to name
-      const player1Name = game.players[1].nickname || game.players[1].name || 'Player 1';
-      const player2Name = game.players[2].nickname || game.players[2].name || 'Player 2';
+      const player1Name = game.players[1].name || 'Player 1';
+      const player2Name = game.players[2].name || 'Player 2';
+      const player1Nickname = game.players[1].nickname;
+      const player2Nickname = game.players[2].nickname;
       
       // Create async game with same grid size as realtime game
       const asyncGame = this.asyncGameManager.createGame(
@@ -630,7 +632,9 @@ export class WebSocketHandler {
         game.gridSize || 10, // Use stored gridSize, default to 10
         isRanked,
         player1Name,
-        player2Name
+        player2Name,
+        player1Nickname,
+        player2Nickname
       );
       
       // Map realtime gameId to async gameId

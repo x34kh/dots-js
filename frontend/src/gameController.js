@@ -979,6 +979,11 @@ export class GameController {
       
       // Join the game room
       this.wsClient.send({ type: 'join_game', gameId });
+      
+      // Wait a moment for join to complete, then request presence
+      setTimeout(() => {
+        console.log('Requesting initial presence update for', gameId);
+      }, 500);
     }
     
     // Determine which player we are
@@ -994,11 +999,13 @@ export class GameController {
     this.stateMachine.setPlayer(1, { 
       id: gameState.player1Id, 
       name: gameState.player1Name || 'Player 1',
+      nickname: gameState.player1Nickname,
       score: 0
     });
     this.stateMachine.setPlayer(2, { 
       id: gameState.player2Id, 
       name: gameState.player2Name || 'Player 2',
+      nickname: gameState.player2Nickname,
       score: 0
     });
     

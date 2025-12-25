@@ -23,7 +23,7 @@ export class AsyncGameManager {
   /**
    * Create a new async game
    */
-  createGame(player1Id, player2Id, gridSize = 10, isRanked = false, player1Name = 'Player 1', player2Name = 'Player 2') {
+  createGame(player1Id, player2Id, gridSize = 10, isRanked = false, player1Name = 'Player 1', player2Name = 'Player 2', player1Nickname = null, player2Nickname = null) {
     // Check player game limits
     if (this.getPlayerActiveGameCount(player1Id) >= this.maxGamesPerPlayer) {
       throw new Error('Player 1 has reached maximum active games');
@@ -41,6 +41,8 @@ export class AsyncGameManager {
       player2Id,
       player1Name,
       player2Name,
+      player1Nickname,
+      player2Nickname,
       gridSize,
       isRanked,
       currentPlayer: 1,
@@ -215,12 +217,14 @@ export class AsyncGameManager {
     const playerNum = game.player1Id === userId ? 1 : 2;
     const opponentId = playerNum === 1 ? game.player2Id : game.player1Id;
     const opponentName = playerNum === 1 ? game.player2Name : game.player1Name;
+    const opponentNickname = playerNum === 1 ? game.player2Nickname : game.player1Nickname;
     const opponentRating = this.eloService.getRating(opponentId);
 
     return {
       id: game.id,
       opponentId,
       opponentName: opponentName || opponentId,
+      opponentNickname,
       opponentRating: opponentRating.rating,
       myScore: game.scores[playerNum],
       opponentScore: game.scores[playerNum === 1 ? 2 : 1],
