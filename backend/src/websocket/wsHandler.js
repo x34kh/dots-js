@@ -354,15 +354,15 @@ export class WebSocketHandler {
       };
 
       // Save game to async storage
-      this.saveGameToAsync(result.gameId, result.game, result.isRanked);
+      const asyncGame = this.saveGameToAsync(result.gameId, result.game, result.isRanked);
 
-      // Add both players to game room for presence tracking
-      if (!this.gameRooms.has(result.gameId)) {
-        this.gameRooms.set(result.gameId, new Set());
+      // Add both players to game room using ASYNC game ID (canonical ID)
+      if (!this.gameRooms.has(asyncGame.id)) {
+        this.gameRooms.set(asyncGame.id, new Set());
       }
-      this.gameRooms.get(result.gameId).add(result.player1);
-      this.gameRooms.get(result.gameId).add(result.player2);
-      console.log(`Added players to game room ${result.gameId}:`, Array.from(this.gameRooms.get(result.gameId)));
+      this.gameRooms.get(asyncGame.id).add(result.player1);
+      this.gameRooms.get(asyncGame.id).add(result.player2);
+      console.log(`Added players to game room ${asyncGame.id}:`, Array.from(this.gameRooms.get(asyncGame.id)));
 
       if (ws1) {
         this.send(ws1, { ...startMessage, data: { ...startMessage.data, playerNumber: 1 } });
@@ -371,8 +371,8 @@ export class WebSocketHandler {
         this.send(ws2, { ...startMessage, data: { ...startMessage.data, playerNumber: 2 } });
       }
       
-      // Broadcast presence update to both players
-      this.broadcastPresenceUpdate(result.gameId);
+      // Broadcast presence update to both players using async game ID
+      this.broadcastPresenceUpdate(asyncGame.id);
       
       // Broadcast updated queue stats
       this.broadcastQueueStats();
@@ -814,8 +814,11 @@ export class WebSocketHandler {
       this.gameToAsync.set(realtimeGameId, asyncGame.id);
       
       console.log(`Saved realtime game ${realtimeGameId} (gridSize: ${game.gridSize}) as async game ${asyncGame.id}`);
+      
+      return asyncGame; // Return so caller can use the async ID
     } catch (error) {
       console.error('Failed to save game to async storage:', error);
+      return null;
     }
   }
   
