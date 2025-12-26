@@ -252,6 +252,9 @@ export class WebSocketHandler {
       this.gameRooms.get(gameId).add(client.userId);
       
       console.log(`Player ${client.userId} joined/rejoined game ${gameId} as player ${result.playerNumber}`);
+      console.log(`Game room ${gameId} now has players:`, Array.from(this.gameRooms.get(gameId)));
+      console.log(`userSockets has:`, Array.from(this.userSockets.keys()));
+      console.log(`Player ${client.userId} socket exists:`, this.userSockets.has(client.userId));
       
       this.send(ws, {
         type: 'game_joined',
@@ -735,14 +738,20 @@ export class WebSocketHandler {
     const playersInRoom = this.gameRooms.get(gameId);
     if (playersInRoom && playersInRoom.size > 0) {
       console.log(`Broadcasting to game room ${gameId}, ${playersInRoom.size} players`);
+      console.log(`Message type: ${message.type}`);
+      let sentCount = 0;
       for (const playerId of playersInRoom) {
         const ws = this.userSockets.get(playerId);
+        console.log(`Looking for socket for player ${playerId}: ${ws ? 'found' : 'NOT FOUND'}`);
         if (ws) {
           this.send(ws, message);
+          sentCount++;
         } else {
           console.log(`No socket found for player ${playerId}`);
+          console.log(`Available sockets:`, Array.from(this.userSockets.keys()));
         }
       }
+      console.log(`Sent ${message.type} to ${sentCount} out of ${playersInRoom.size} players`);
       return;
     }
     
