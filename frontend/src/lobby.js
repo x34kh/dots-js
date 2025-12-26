@@ -607,7 +607,6 @@ export class LobbyUI {
         border: 2px solid rgba(255, 255, 255, 0.2);
         border-radius: 10px;
         padding: 20px;
-        overflow: hidden; /* Prevent section from growing */
         display: flex;
         flex-direction: column;
       }
