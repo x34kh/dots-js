@@ -1008,30 +1008,35 @@ export class LobbyUI {
         font-style: italic;
       }
       
-      .btn {
-        padding: 12px 24px;
-        border: none;
-        border-radius: 5px;
-        font-size: 1em;
-        cursor: pointer;
-        transition: all 0.2s;
+      #lobby-container .btn,
+      .lobby-container .btn {
+        padding: 12px 24px !important;
+        border: none !important;
+        border-radius: 5px !important;
+        font-size: 1em !important;
+        cursor: pointer !important;
+        transition: all 0.2s !important;
       }
       
-      .btn-primary {
+      #lobby-container .btn-primary,
+      .lobby-container .btn-primary {
         background: #2196F3 !important;
         color: white !important;
       }
       
-      .btn-primary:hover {
+      #lobby-container .btn-primary:hover,
+      .lobby-container .btn-primary:hover {
         background: #1976D2 !important;
       }
       
-      .btn-secondary {
+      #lobby-container .btn-secondary,
+      .lobby-container .btn-secondary {
         background: rgba(255, 255, 255, 0.2) !important;
         color: white !important;
       }
       
-      .btn-secondary:hover {
+      #lobby-container .btn-secondary:hover,
+      .lobby-container .btn-secondary:hover {
         background: rgba(255, 255, 255, 0.3) !important;
       }
       
