@@ -1036,8 +1036,15 @@ export class GameController {
     this.boardLogic.reset();
     this.renderer.reset();
     
-    // Ensure canvas is properly sized
-    this.renderer.handleResize();
+    // Ensure canvas is properly sized after DOM is updated
+    // Use requestAnimationFrame to ensure the container is visible first
+    requestAnimationFrame(() => {
+      this.renderer.handleResize();
+      // Call again to ensure it's properly sized
+      requestAnimationFrame(() => {
+        this.renderer.handleResize();
+      });
+    });
     
     let player1Score = 0;
     let player2Score = 0;

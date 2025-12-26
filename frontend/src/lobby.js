@@ -602,11 +602,18 @@ export class LobbyUI {
         gap: 20px;
       }
       
-      .profile-section, .queue-section, .match-history-section {
+      .profile-section, .queue-section, .match-history-section, .current-games-section {
         background: rgba(0, 0, 0, 0.3);
         border: 2px solid rgba(255, 255, 255, 0.2);
         border-radius: 10px;
         padding: 20px;
+        overflow: hidden; /* Prevent section from growing */
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .current-games-section {
+        max-height: 600px; /* Constrain the entire section */
       }
       
       .match-history-section {
@@ -732,31 +739,34 @@ export class LobbyUI {
         flex-direction: column;
         gap: 10px;
         max-height: 400px;
-        overflow-y: scroll; /* Force scrollbar to always show */
+        overflow-y: scroll !important; /* Force scrollbar to always show */
         overflow-x: hidden;
         padding-right: 10px;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
         scrollbar-width: thin; /* For Firefox */
         scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05); /* For Firefox */
+        flex: 1;
+        min-height: 0;
       }
       
       .match-history-list::-webkit-scrollbar {
-        width: 8px;
+        width: 12px;
       }
       
       .match-history-list::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
       }
       
       .match-history-list::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.4);
+        border-radius: 6px;
+        border: 2px solid rgba(0, 0, 0, 0.3);
       }
       
       .match-history-list::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.6);
       }
       
       .match-item {
@@ -848,29 +858,32 @@ export class LobbyUI {
         flex-direction: column;
         gap: 15px;
         max-height: 500px;
-        overflow-y: scroll; /* Force scrollbar to always show */
+        overflow-y: scroll !important; /* Force scrollbar to always show */
         overflow-x: hidden;
         padding-right: 10px;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
         scrollbar-width: thin; /* For Firefox */
         scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05); /* For Firefox */
+        flex: 1; /* Take available space */
+        min-height: 0; /* Allow flexbox to shrink */
       }
-      
-      .current-games-list::-webkit-scrollbar {
-        width: 8px;
+      12px; /* Make scrollbar wider/more visible */
       }
       
       .current-games-list::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
       }
       
       .current-games-list::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.4);
+        border-radius: 6px;
+        border: 2px solid rgba(0, 0, 0, 0.3);
       }
       
+      .current-games-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.6
       .current-games-list::-webkit-scrollbar-thumb:hover {
         background: rgba(255, 255, 255, 0.3);
       }
