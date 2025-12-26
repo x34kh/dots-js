@@ -692,7 +692,7 @@ export class WebSocketHandler {
           const game = this.gameManager.getGame(gameId);
           if (game) {
             // Find opponent and notify
-            for (const [num, player] of Object.entries(game.players)) {
+            for (const [, player] of Object.entries(game.players)) {
               if (player && player.id !== client.userId) {
                 const opponentWs = this.userSockets.get(player.id);
                 if (opponentWs) {

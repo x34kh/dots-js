@@ -135,7 +135,7 @@ export class AsyncGameManager {
    * Calculate captured territory (simplified version)
    * TODO: Integrate with actual BoardLogic for accurate capture detection
    */
-  calculateCapture(game, x, y, playerNum) {
+  calculateCapture(_game, _x, _y, _playerNum) {
     // This is a placeholder - you should integrate with your actual BoardLogic
     // For now, return empty array
     return [];

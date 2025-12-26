@@ -45,7 +45,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const wsHandler = new WebSocketHandler(wss, authService, gameManager, asyncGameManager);
 
 // Setup REST routes
-app.use('/api', createRouter(authService, gameManager, eloService, asyncGameManager));
+app.use('/api', createRouter(authService, gameManager, eloService, asyncGameManager, wsHandler));
 
 // Health check
 app.get('/health', (req, res) => {

@@ -24,7 +24,7 @@ const anonCreateLimiter = rateLimit({
   legacyHeaders: false
 });
 
-export function createRouter(authService, gameManager, eloService, asyncGameManager) {
+export function createRouter(authService, gameManager, eloService, asyncGameManager, wsHandler) {
   const router = Router();
 
   // Authentication routes
