@@ -466,16 +466,16 @@ body {
   margin: 10px 0;
   font-size: 18px;
   font-weight: bold;
-  color: #fff;
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  border: 2px solid #00ffff;
+  color: #fff !important;
+  background: linear-gradient(135deg, #1a1a2e, #16213e) !important;
+  border: 2px solid #00ffff !important;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 #game-menu button:hover {
-  background: linear-gradient(135deg, #00ffff33, #ff00ff33);
+  background: linear-gradient(135deg, #00ffff33, #ff00ff33) !important;
   transform: translateY(-2px);
   box-shadow: 0 5px 20px rgba(0, 255, 255, 0.4);
 }
