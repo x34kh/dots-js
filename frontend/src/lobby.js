@@ -732,11 +732,13 @@ export class LobbyUI {
         flex-direction: column;
         gap: 10px;
         max-height: 400px;
-        overflow-y: auto;
+        overflow-y: scroll; /* Force scrollbar to always show */
         overflow-x: hidden;
         padding-right: 10px;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
+        scrollbar-width: thin; /* For Firefox */
+        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05); /* For Firefox */
       }
       
       .match-history-list::-webkit-scrollbar {
@@ -846,11 +848,13 @@ export class LobbyUI {
         flex-direction: column;
         gap: 15px;
         max-height: 500px;
-        overflow-y: auto;
+        overflow-y: scroll; /* Force scrollbar to always show */
         overflow-x: hidden;
         padding-right: 10px;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
+        scrollbar-width: thin; /* For Firefox */
+        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05); /* For Firefox */
       }
       
       .current-games-list::-webkit-scrollbar {
