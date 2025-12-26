@@ -660,11 +660,23 @@ export class WebSocketHandler {
       // Remove from game rooms and notify
       for (const [gameId, players] of this.gameRooms.entries()) {
         if (players.has(client.userId)) {
-          players.delete(client.userId);
-          this.broadcastPresenceUpdate(gameId);
-          if (players.size === 0) {
-            this.gameRooms.delete(gameId);
+          // Check if this is an async game - if so, keep player in room
+          const asyncGame = this.asyncGameManager.games.get(gameId);
+          const isActiveAsyncGame = asyncGame && asyncGame.status === 'active';
+          
+          if (isActiveAsyncGame) {
+            console.log(`Player ${client.userId} leaving game ${gameId}`);
+            console.log(`Remaining players:`, Array.from(players));
+          } else {
+            // Not an active async game - remove from room
+            players.delete(client.userId);
+            console.log(`Removed player from room. Remaining players:`, Array.from(players));
+            if (players.size === 0) {
+              this.gameRooms.delete(gameId);
+            }
           }
+          
+          this.broadcastPresenceUpdate(gameId);
         }
       }
 
