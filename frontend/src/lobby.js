@@ -1018,21 +1018,21 @@ export class LobbyUI {
       }
       
       .btn-primary {
-        background: #2196F3;
-        color: white;
+        background: #2196F3 !important;
+        color: white !important;
       }
       
       .btn-primary:hover {
-        background: #1976D2;
+        background: #1976D2 !important;
       }
       
       .btn-secondary {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
+        background: rgba(255, 255, 255, 0.2) !important;
+        color: white !important;
       }
       
       .btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.3) !important;
       }
       
       .hidden {
