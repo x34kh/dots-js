@@ -1348,8 +1348,11 @@ export class GameController {
   async makeMove(x, y) {
     const playerNum = this.stateMachine.currentPlayer;
     
-    // For online games, send to server first and wait for confirmation
-    if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
+    // For online games that started from matchmaking (not resumed async games), send to server first
+    // For resumed async games, always use async API even when both players are online
+    const isResumedAsyncGame = this.stateMachine.gameId && this.stateMachine.gameId.startsWith('async_');
+    
+    if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient && !isResumedAsyncGame) {
       // Check if WebSocket is connected
       if (!this.wsClient.isConnected()) {
         notificationManager.show('Connection lost - reconnecting...', 'error');
@@ -1365,7 +1368,7 @@ export class GameController {
       return; // Wait for server response in moveResult handler
     }
     
-    // For P2P and async games, validate and apply locally
+    // For P2P, async games, and resumed async games (even in ONLINE mode), validate and apply locally
     const result = this.boardLogic.occupyDot(x, y, playerNum);
     
     if (!result.success) {
@@ -1382,8 +1385,8 @@ export class GameController {
     // Send move to opponent/server
     if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
       this.p2p.sendMove({ x, y, playerNum });
-    } else if (this.stateMachine.mode === GameMode.ASYNC) {
-      // Send move to async API
+    } else if (this.stateMachine.mode === GameMode.ASYNC || isResumedAsyncGame) {
+      // Send move to async API (for ASYNC mode or resumed async games in ONLINE mode)
       await this.submitAsyncMove(x, y);
     }
     

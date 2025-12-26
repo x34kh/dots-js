@@ -784,6 +784,40 @@ export class WebSocketHandler {
       }
     }
   }
+
+  /**
+   * Broadcast an async game move to the opponent if they're online
+   */
+  broadcastAsyncMove(gameId, movingPlayerId, x, y, capturedDots) {
+    const asyncGame = this.asyncGameManager.games.get(gameId);
+    if (!asyncGame) {
+      console.log(`No async game found for ${gameId}`);
+      return;
+    }
+
+    // Determine which player made the move and who the opponent is
+    const isPlayer1 = asyncGame.player1Id === movingPlayerId;
+    const playerNum = isPlayer1 ? 1 : 2;
+    const opponentId = isPlayer1 ? asyncGame.player2Id : asyncGame.player1Id;
+
+    // Check if opponent is in the game room (online)
+    const playersInRoom = this.gameRooms.get(gameId);
+    if (playersInRoom && playersInRoom.has(opponentId)) {
+      const opponentWs = this.userSockets.get(opponentId);
+      if (opponentWs) {
+        console.log(`Broadcasting async move to opponent ${opponentId}`);
+        this.send(opponentWs, {
+          type: 'opponent_move',
+          data: {
+            move: { x, y },
+            playerNum: playerNum,
+            captures: capturedDots || [],
+            currentPlayer: asyncGame.currentPlayer
+          }
+        });
+      }
+    }
+  }
   
   /**
    * Save a realtime game to async storage for persistence

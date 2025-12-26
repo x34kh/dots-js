@@ -241,6 +241,12 @@ export function createRouter(authService, gameManager, eloService, asyncGameMana
 
     try {
       const result = asyncGameManager.makeMove(req.params.gameId, userId, x, y);
+      
+      // Broadcast move to other player if both are online (in game room)
+      if (wsHandler) {
+        wsHandler.broadcastAsyncMove(req.params.gameId, userId, x, y, result.capturedDots);
+      }
+      
       res.json(result);
     } catch (error) {
       res.status(400).json({ error: error.message });
