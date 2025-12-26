@@ -738,16 +738,14 @@ export class LobbyUI {
         display: flex;
         flex-direction: column;
         gap: 10px;
-        max-height: 400px;
-        overflow-y: scroll !important; /* Force scrollbar to always show */
+        height: 350px; /* Fixed height instead of max-height */
+        overflow-y: auto; /* auto instead of scroll */
         overflow-x: hidden;
         padding-right: 10px;
         -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-        scrollbar-width: thin; /* For Firefox */
-        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05); /* For Firefox */
-        flex: 1;
-        min-height: 0;
+        overscroll-behavior-y: contain;
+        scrollbar-width: auto;
+        scrollbar-color: rgba(255, 255, 255, 0.4) rgba(0, 0, 0, 0.2);
       }
       
       .match-history-list::-webkit-scrollbar {
@@ -857,16 +855,14 @@ export class LobbyUI {
         display: flex;
         flex-direction: column;
         gap: 15px;
-        max-height: 500px;
-        overflow-y: scroll !important; /* Force scrollbar to always show */
+        height: 400px; /* Fixed height instead of max-height */
+        overflow-y: auto; /* auto instead of scroll */
         overflow-x: hidden;
         padding-right: 10px;
         -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-        scrollbar-width: thin; /* For Firefox */
-        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05); /* For Firefox */
-        flex: 1; /* Take available space */
-        min-height: 0; /* Allow flexbox to shrink */
+        overscroll-behavior-y: contain;
+        scrollbar-width: auto; /* Let browser use default */
+        scrollbar-color: rgba(255, 255, 255, 0.4) rgba(0, 0, 0, 0.2);
       }
       12px; /* Make scrollbar wider/more visible */
       }
