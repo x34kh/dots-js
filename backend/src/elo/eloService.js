@@ -4,12 +4,60 @@
  */
 
 export class EloService {
-  constructor() {
+  constructor(redisClient = null) {
+    this.redis = redisClient;
     this.ratings = new Map(); // userId -> { rating, gamesPlayed, wins, losses, draws }
     this.matches = []; // Match history
     this.K_FACTOR = 32; // Default K-factor
     this.PROVISIONAL_GAMES = 10; // Games before rating stabilizes
     this.PROVISIONAL_K = 64; // Higher K for new players
+    this.RATINGS_KEY = 'dots:elo:ratings';
+    this.MATCHES_KEY = 'dots:elo:matches';
+  }
+
+  async init() {
+    if (!this.redis) return;
+
+    try {
+      const [ratingsRaw, matchesRaw] = await Promise.all([
+        this.redis.get(this.RATINGS_KEY),
+        this.redis.get(this.MATCHES_KEY)
+      ]);
+
+      if (ratingsRaw) {
+        const parsedRatings = JSON.parse(ratingsRaw);
+        this.ratings = new Map(parsedRatings);
+      }
+
+      if (matchesRaw) {
+        const parsedMatches = JSON.parse(matchesRaw);
+        this.matches = Array.isArray(parsedMatches) ? parsedMatches : [];
+      }
+
+      console.log(`ELO persistence loaded: ${this.ratings.size} players, ${this.matches.length} matches`);
+    } catch (error) {
+      console.error('Failed to load ELO persistence from Redis:', error);
+    }
+  }
+
+  async persistRatings() {
+    if (!this.redis) return;
+
+    try {
+      await this.redis.set(this.RATINGS_KEY, JSON.stringify(Array.from(this.ratings.entries())));
+    } catch (error) {
+      console.error('Failed to persist ratings to Redis:', error);
+    }
+  }
+
+  async persistMatches() {
+    if (!this.redis) return;
+
+    try {
+      await this.redis.set(this.MATCHES_KEY, JSON.stringify(this.matches));
+    } catch (error) {
+      console.error('Failed to persist match history to Redis:', error);
+    }
   }
 
   /**
@@ -24,6 +72,7 @@ export class EloService {
         losses: 0,
         draws: 0
       });
+      this.persistRatings();
     }
     return this.ratings.get(userId);
   }
@@ -87,6 +136,8 @@ export class EloService {
       player2.draws++;
     }
 
+    await this.persistRatings();
+
     return {
       player1: {
         oldRating: oldRating1,
@@ -120,6 +171,7 @@ export class EloService {
       ...matchData
     };
     this.matches.push(match);
+    await this.persistMatches();
     return match;
   }
 

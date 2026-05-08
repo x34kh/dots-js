@@ -201,6 +201,8 @@ export class GameManager {
         player2Score: game.scores[2] || 0,
         winnerId: game.winner === 1 ? player1Id : game.winner === 2 ? player2Id : null,
         isRanked: game.isRanked || false,
+        gridSize: game.gridSize || 10,
+        moves: (game.moves || []).map(m => ({ x: m.move.x, y: m.move.y, player: m.player })),
         completedAt: new Date()
       });
     }

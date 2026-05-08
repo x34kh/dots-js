@@ -167,6 +167,13 @@ export class WebSocketClient {
     switch (message.type) {
       case 'auth_success':
         this.emit('authenticated', message.data);
+        // Rejoin active game room after reconnect so presence and game-over events continue to flow.
+        if (this.gameId) {
+          this.send({
+            type: 'join_game',
+            gameId: this.gameId
+          });
+        }
         // Flush any pending messages after successful auth
         this.flushPendingMessages();
         break;

@@ -152,14 +152,12 @@ export function createRouter(authService, gameManager, eloService, asyncGameMana
   // Online stats - player counts
   router.get('/stats/online', (req, res) => {
     const queueStats = gameManager.getQueueStats();
-    
-    // Count connected players would need WebSocket tracking
-    // For now, estimate from queue + active games
     const playersInQueue = queueStats.rankedQueue + queueStats.unrankedQueue;
     const playersPlaying = queueStats.activeGames * 2; // 2 players per game
+    const playersOnline = wsHandler ? wsHandler.clients.size : playersInQueue + playersPlaying;
     
     res.json({
-      playersOnline: playersInQueue + playersPlaying,
+      playersOnline,
       playersInQueue,
       playersPlaying,
       rankedQueue: queueStats.rankedQueue,
@@ -178,6 +176,24 @@ export function createRouter(authService, gameManager, eloService, asyncGameMana
     const limit = parseInt(req.query.limit) || 20;
     const matches = eloService.getMatchHistory(req.params.userId, limit);
     res.json(matches);
+  });
+
+  // Replay endpoint - returns moves for a completed game
+  router.get('/replay/:gameId', (req, res) => {
+    const match = eloService.matches.find(m => String(m.gameId) === String(req.params.gameId));
+    if (!match) return res.status(404).json({ error: 'Replay not found' });
+    res.json({
+      gameId: match.gameId,
+      gridSize: match.gridSize || 10,
+      player1Id: match.player1Id,
+      player1Name: match.player1Name,
+      player2Id: match.player2Id,
+      player2Name: match.player2Name,
+      player1Score: match.player1Score,
+      player2Score: match.player2Score,
+      winnerId: match.winnerId,
+      moves: match.moves || []
+    });
   });
 
   // Async/Turn-based game routes

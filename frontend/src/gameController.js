@@ -916,8 +916,12 @@ export class GameController {
     // Update renderer colors to match current skin selections
     this.renderer.updateSkinColors();
     
-    // Ensure canvas is properly sized and rendered
-    this.renderer.handleResize();
+    // Ensure canvas is properly sized after the game container becomes visible.
+    // Use rAF so the browser has computed layout before we read clientWidth/clientHeight.
+    requestAnimationFrame(() => {
+      this.renderer.handleResize();
+      requestAnimationFrame(() => this.renderer.handleResize());
+    });
     
     console.log('localPlayerId AFTER reset:', this.stateMachine.localPlayerId);
     console.log('currentPlayer AFTER reset:', this.stateMachine.currentPlayer);
@@ -1010,8 +1014,8 @@ export class GameController {
     }
     
     // Determine which player we are
-    const userId = this.auth.user?.sub || this.auth.user?.id;
-    this.stateMachine.localPlayerId = (gameState.player1Id === userId) ? 1 : 2;
+    const userId = String(this.auth.user?.sub || this.auth.user?.id || this.auth.getAnonymousAuthData()?.anonymousId || '');
+    this.stateMachine.localPlayerId = String(gameState.player1Id) === userId ? 1 : 2;
     
     console.log('User ID:', userId);
     console.log('Player1 ID:', gameState.player1Id, 'Player2 ID:', gameState.player2Id);
@@ -1063,18 +1067,21 @@ export class GameController {
         // Handle captured territories
         if (result.capturedDots && result.capturedDots.length > 0) {
           this.renderer.setCapturedDots(result.capturedDots, move.player);
-          // Update score based on captured dots
-          if (move.player === 1) player1Score += result.capturedDots.length;
-          else player2Score += result.capturedDots.length;
+          // Keep local tally as a fallback when server scores are unavailable.
+          if (move.player === 1) player1Score += 1 + result.capturedDots.length;
+          else player2Score += 1 + result.capturedDots.length;
         }
       } else {
         console.error('Failed to replay move:', move, result);
       }
     }
     
-    // Update scores
-    this.stateMachine.players[1].score = player1Score;
-    this.stateMachine.players[2].score = player2Score;
+    // Prefer authoritative backend scores if present; replay tally is only a fallback.
+    const serverP1 = Number(gameState?.scores?.[1]);
+    const serverP2 = Number(gameState?.scores?.[2]);
+    const hasServerScores = Number.isFinite(serverP1) && Number.isFinite(serverP2);
+    this.stateMachine.players[1].score = hasServerScores ? serverP1 : player1Score;
+    this.stateMachine.players[2].score = hasServerScores ? serverP2 : player2Score;
     
     // Set current player
     this.stateMachine.setCurrentPlayer(gameState.currentPlayer);
@@ -1182,7 +1189,7 @@ export class GameController {
     if (this.stateMachine.mode === GameMode.DEMO && this.p2p) {
       // P2P resign
       this.p2p.send({ type: 'forfeit', player: currentPlayerId });
-    } else if (this.stateMachine.mode === GameMode.ONLINE && this.wsClient) {
+    } else if ((this.stateMachine.mode === GameMode.ONLINE || this.stateMachine.mode === GameMode.ASYNC) && this.wsClient) {
       // Server resign
       this.wsClient.resign();
     }
@@ -1539,6 +1546,15 @@ export class GameController {
     // Hide forfeit button
     document.getElementById('btn-forfeit').classList.add('hidden');
     
+    if (data && data.scores) {
+      if (Number.isFinite(Number(data.scores[1]))) {
+        this.stateMachine.players[1].score = Number(data.scores[1]);
+      }
+      if (Number.isFinite(Number(data.scores[2]))) {
+        this.stateMachine.players[2].score = Number(data.scores[2]);
+      }
+    }
+
     const winner = this.stateMachine.getWinner();
     const p1Score = this.stateMachine.players[1].score;
     const p2Score = this.stateMachine.players[2].score;
@@ -1549,6 +1565,14 @@ export class GameController {
       const winnerId = data.forfeiter === 1 ? 2 : 1;
       const winnerName = this.stateMachine.players[winnerId].name;
       winnerText = `${winnerName} wins! (${forfeiterName} forfeited)`;
+    } else if (data && (data.resigned || data.winner)) {
+      const winnerId = data.winner;
+      if (winnerId === 1 || winnerId === 2) {
+        const winnerName = this.stateMachine.players[winnerId].name;
+        winnerText = `${winnerName} wins!`;
+      } else {
+        winnerText = "It's a draw!";
+      }
     } else if (winner === null) {
       winnerText = "It's a draw!";
     } else {

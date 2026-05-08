@@ -201,6 +201,8 @@ export class AsyncGameManager {
       player2Score: game.scores[2],
       winnerId,
       isRanked: game.isRanked,
+      gridSize: game.gridSize || 10,
+      moves: (game.moves || []).map(m => ({ x: m.x, y: m.y, player: m.player })),
       gameType: 'async'
     });
 

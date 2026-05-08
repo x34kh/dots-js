@@ -97,6 +97,7 @@ export class WebSocketHandler {
       
       // Broadcast updated online count
       this.broadcastQueueStats();
+      this.syncPresenceForUser(result.user.id);
     } else {
       this.send(ws, {
         type: 'auth_error',
@@ -150,6 +151,16 @@ export class WebSocketHandler {
     
     // Broadcast updated online count
     this.broadcastQueueStats();
+    this.syncPresenceForUser(anonymousId);
+  }
+
+  syncPresenceForUser(userId) {
+    const userIdStr = String(userId);
+    for (const [gameId, players] of this.gameRooms.entries()) {
+      if (players.has(userIdStr)) {
+        this.broadcastPresenceUpdate(gameId);
+      }
+    }
   }
 
   handleCreateGame(ws) {
@@ -459,8 +470,8 @@ export class WebSocketHandler {
     const player2IdStr = String(player2Id);
     
     const presence = {
-      player1Online: player1Id ? playersInRoom.has(player1IdStr) : false,
-      player2Online: player2Id ? playersInRoom.has(player2IdStr) : false
+      player1Online: player1Id ? this.userSockets.has(player1IdStr) : false,
+      player2Online: player2Id ? this.userSockets.has(player2IdStr) : false
     };
     
     console.log('Broadcasting presence update:', { gameId, presence, player1Id: player1IdStr, player2Id: player2IdStr });

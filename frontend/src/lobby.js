@@ -3,17 +3,20 @@
  * Displays player profile, ELO, match history, and queue controls
  */
 
+import { GameReplay } from './gameReplay.js';
+
 export class LobbyUI {
   constructor(websocket, authState, serverUrl, onResumeGame) {
     this.websocket = websocket;
     this.authState = authState;
     this.serverUrl = serverUrl;
-    this.onResumeGame = onResumeGame; // Callback to resume a game
+    this.onResumeGame = onResumeGame;
     this.profileData = null;
     this.queueStats = null;
-    this.currentGames = []; // Active async games
+    this.currentGames = [];
     this.inQueue = false;
     this.currentQueueType = null;
+    this.replay = new GameReplay(serverUrl);
   }
   
   getApiUrl() {
@@ -354,6 +357,9 @@ export class LobbyUI {
       const resultText = match.result.toUpperCase();
       const date = new Date(match.completedAt).toLocaleDateString();
       const rankedBadge = match.isRanked ? '<span class="ranked-badge">Ranked</span>' : '';
+      const replayBtn = match.gameId
+        ? `<button class="btn-replay-match" data-game-id="${match.gameId}">▶ Replay</button>`
+        : '';
       
       return `
         <div class="match-item ${resultClass}">
@@ -365,6 +371,7 @@ export class LobbyUI {
           <div class="match-meta">
             ${rankedBadge}
             <span class="match-date">${date}</span>
+            ${replayBtn}
           </div>
         </div>
       `;
@@ -507,6 +514,14 @@ export class LobbyUI {
     
     // Attach current game continue listeners
     this.attachGameContinueListeners();
+
+    // Attach replay button listeners
+    document.querySelectorAll('.btn-replay-match').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const gameId = e.target.dataset.gameId;
+        this.replay.show(gameId, 1000);
+      });
+    });
   }
 
   joinQueue(isRanked) {
@@ -860,10 +875,12 @@ export class LobbyUI {
         padding-right: 10px;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior-y: contain;
-        scrollbar-width: auto; /* Let browser use default */
+        scrollbar-width: auto;
         scrollbar-color: rgba(255, 255, 255, 0.4) rgba(0, 0, 0, 0.2);
       }
-      12px; /* Make scrollbar wider/more visible */
+      
+      .current-games-list::-webkit-scrollbar {
+        width: 12px;
       }
       
       .current-games-list::-webkit-scrollbar-track {
@@ -878,9 +895,7 @@ export class LobbyUI {
       }
       
       .current-games-list::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.6
-      .current-games-list::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.6);
       }
       
       .current-game-item {
@@ -1065,6 +1080,23 @@ export class LobbyUI {
         .lobby-container {
           padding-bottom: 50px;
         }
+      }
+
+      .btn-replay-match {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.8);
+        border-radius: 4px;
+        padding: 3px 10px;
+        font-size: 0.8em;
+        cursor: pointer;
+        margin-top: 4px;
+        display: block;
+        transition: background 0.15s;
+      }
+      .btn-replay-match:hover {
+        background: rgba(255, 255, 255, 0.18);
+        color: white;
       }
     `;
     

@@ -78,7 +78,7 @@ export class GoogleAuth {
       itp_support: true,
       context: 'signin',
       ux_mode: 'popup',
-      use_fedcm_for_prompt: true
+      use_fedcm_for_prompt: false
     });
 
     // Check for existing session

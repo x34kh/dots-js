@@ -128,7 +128,7 @@ export class GameRenderer {
       antialias: true,
       alpha: true
     });
-    this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight);
+    this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     // Post-processing for bloom effect
@@ -1114,9 +1114,14 @@ export class GameRenderer {
   }
 
   handleResize() {
-    const width = this.canvas.clientWidth;
-    const height = this.canvas.clientHeight;
-    
+    // Read dimensions from the parent container so that CSS flex/percent sizing
+    // governs the canvas size (Three.js setSize would lock inline px styles).
+    const container = this.canvas.parentElement;
+    const width = container ? container.clientWidth : this.canvas.clientWidth;
+    const height = container ? container.clientHeight : this.canvas.clientHeight;
+
+    if (width === 0 || height === 0) return;
+
     // Recalculate minimum zoom for new aspect ratio
     this.minZoom = this.calculateMinZoom();
     
@@ -1127,7 +1132,9 @@ export class GameRenderer {
     this.updateCameraZoom();
     this.updateCameraPosition();
 
-    this.renderer.setSize(width, height);
+    // Pass false so Three.js does NOT set inline style width/height,
+    // letting the CSS width:100%/height:100% remain in control.
+    this.renderer.setSize(width, height, false);
     this.composer.setSize(width, height);
   }
 

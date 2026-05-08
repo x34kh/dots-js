@@ -57,6 +57,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: manual
+  volumeName: dots-redis-pv
   resources:
     requests:
-      storage: 1Gi
+      storage: 2Gi

@@ -7,12 +7,39 @@ import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 
 export class AuthService {
-  constructor(clientId) {
+  constructor(clientId, redisClient = null) {
     this.clientId = clientId;
     this.client = clientId ? new OAuth2Client(clientId) : null;
+    this.redis = redisClient;
     this.users = new Map(); // userId -> user data
+    this.USERS_KEY = 'dots:auth:users';
     // Secret key for signing anonymous tokens - should be from environment in production
     this.anonymousSecret = process.env.ANONYMOUS_SECRET || 'dots-js-anonymous-secret-key-2024';
+  }
+
+  async init() {
+    if (!this.redis) return;
+
+    try {
+      const usersRaw = await this.redis.get(this.USERS_KEY);
+      if (!usersRaw) return;
+
+      const parsedUsers = JSON.parse(usersRaw);
+      this.users = new Map(parsedUsers);
+      console.log(`Auth persistence loaded: ${this.users.size} users`);
+    } catch (error) {
+      console.error('Failed to load auth persistence from Redis:', error);
+    }
+  }
+
+  async persistUsers() {
+    if (!this.redis) return;
+
+    try {
+      await this.redis.set(this.USERS_KEY, JSON.stringify(Array.from(this.users.entries())));
+    } catch (error) {
+      console.error('Failed to persist users to Redis:', error);
+    }
   }
 
   /**
@@ -43,6 +70,7 @@ export class AuthService {
 
       // Store/update user
       this.users.set(user.id, user);
+      this.persistUsers();
 
       return { success: true, user };
     } catch (error) {
@@ -70,6 +98,7 @@ export class AuthService {
           nickname: this.generateUniqueNickname()
         };
         this.users.set(user.id, user);
+        this.persistUsers();
         return { success: true, user };
       }
     } catch {
@@ -87,6 +116,7 @@ export class AuthService {
       nickname: this.generateUniqueNickname()
     };
     this.users.set(user.id, user);
+    this.persistUsers();
     return { success: true, user };
   }
 
@@ -104,6 +134,7 @@ export class AuthService {
     const user = this.users.get(userId);
     if (user) {
       Object.assign(user, updates);
+      this.persistUsers();
       return { success: true, user };
     }
     return { success: false, error: 'User not found' };
@@ -156,6 +187,7 @@ export class AuthService {
     };
 
     this.users.set(anonymousId, user);
+    this.persistUsers();
 
     return {
       anonymousId,
@@ -239,6 +271,7 @@ export class AuthService {
     const user = this.users.get(userId);
     if (user) {
       user.nickname = newNickname;
+      this.persistUsers();
       return { success: true, user };
     }
     return { success: false, error: 'User not found' };
