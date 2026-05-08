@@ -9,6 +9,19 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    cors: true
+    cors: true,
+    proxy: {
+      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+      '/ws': { target: 'ws://localhost:8080', ws: true }
+    }
+  },
+  preview: {
+    port: 3000,
+    host: '127.0.0.1',
+    allowedHosts: ['dots.nixsupport.net'],
+    proxy: {
+      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+      '/ws': { target: 'ws://localhost:8080', ws: true }
+    }
   }
 });
