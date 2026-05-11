@@ -17,6 +17,7 @@
     "cors": "^2.8.5",
     "cookie-parser": "^1.4.6",
     "google-auth-library": "^9.4.1",
+    "pino": "^9.5.0",
     "redis": "^4.6.10",
     "uuid": "^9.0.1",
     "dotenv": "^16.3.1"

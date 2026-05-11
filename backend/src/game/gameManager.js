@@ -166,8 +166,9 @@ export class GameManager {
 
     const player1Id = game.players[1]?.id;
     const player2Id = game.players[2]?.id;
-    const player1Name = game.players[1]?.name || player1Id;
-    const player2Name = game.players[2]?.name || player2Id;
+    // Use nickname if available (privacy first), fall back to name, then ID
+    const player1Nickname = game.players[1]?.nickname || game.players[1]?.name || player1Id;
+    const player2Nickname = game.players[2]?.nickname || game.players[2]?.name || player2Id;
 
     console.log(`Game over: ${gameId}, isRanked: ${game.isRanked}, winner: ${game.winner}`);
 
@@ -184,20 +185,22 @@ export class GameManager {
 
       // Only update ELO for ranked games
       if (game.isRanked) {
-        console.log(`Updating ELO for ranked game: ${player1Name} vs ${player2Name}`);
+        console.log(`Updating ELO for ranked game: ${player1Nickname} vs ${player2Nickname}`);
         await this.eloService.updateRatings(player1Id, player2Id, result);
       } else {
-        console.log(`Skipping ELO update for unranked game: ${player1Name} vs ${player2Name}`);
+        console.log(`Skipping ELO update for unranked game: ${player1Nickname} vs ${player2Nickname}`);
       }
 
       // Store match record with detailed info
       await this.eloService.recordMatch({
         gameId,
         player1Id,
-        player1Name,
+        player1Name: player1Nickname,
+        player1Nickname,
         player1Score: game.scores[1] || 0,
         player2Id,
-        player2Name,
+        player2Name: player2Nickname,
+        player2Nickname,
         player2Score: game.scores[2] || 0,
         winnerId: game.winner === 1 ? player1Id : game.winner === 2 ? player2Id : null,
         isRanked: game.isRanked || false,

@@ -4,6 +4,7 @@
  */
 
 import { GameReplay } from './gameReplay.js';
+import { PlayerProfile } from './playerProfile.js';
 
 export class LobbyUI {
   constructor(websocket, authState, serverUrl, onResumeGame) {
@@ -14,9 +15,11 @@ export class LobbyUI {
     this.profileData = null;
     this.queueStats = null;
     this.currentGames = [];
+    this.adminData = null;
     this.inQueue = false;
     this.currentQueueType = null;
     this.replay = new GameReplay(serverUrl);
+    this.playerProfile = new PlayerProfile(authState, serverUrl);
   }
   
   getApiUrl() {
@@ -57,6 +60,11 @@ export class LobbyUI {
     
     // Load current games
     await this.loadCurrentGames();
+
+    // Load admin dashboard data when applicable
+    if (this.authState?.isAdmin) {
+      await this.loadAdminLobbyData();
+    }
     
     // Render lobby UI
     this.render();
@@ -73,6 +81,9 @@ export class LobbyUI {
     // Poll for current games updates every 30 seconds
     this.gamesInterval = setInterval(() => {
       this.loadCurrentGames();
+      if (this.authState?.isAdmin) {
+        this.loadAdminLobbyData();
+      }
     }, 30000);
     
     // Setup nickname editing
@@ -220,6 +231,24 @@ export class LobbyUI {
       .catch(err => console.error('Failed to load queue stats:', err));
   }
 
+  async loadAdminLobbyData() {
+    if (!this.authState?.isAdmin || !this.authState?.userId) {
+      this.adminData = null;
+      return;
+    }
+
+    const apiUrl = this.getApiUrl();
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/lobby?userId=${encodeURIComponent(this.authState.userId)}`);
+      if (response.ok) {
+        this.adminData = await response.json();
+        this.updateAdminPanel();
+      }
+    } catch (error) {
+      console.error('Failed to load admin lobby data:', error);
+    }
+  }
+
   render() {
     const container = document.getElementById('lobby-container');
     
@@ -327,6 +356,8 @@ export class LobbyUI {
               </div>
             </div>
           </div>
+
+          ${this.authState?.isAdmin ? this.renderAdminPanel() : ''}
           
           <!-- Match History Section -->
           <div class="match-history-section">
@@ -346,6 +377,306 @@ export class LobbyUI {
     this.attachEventListeners();
   }
 
+  renderAdminPanel() {
+    const counts = this.adminData?.counts || {
+      onlinePlayers: 0,
+      queuedPlayers: 0,
+      activeGames: 0,
+      finishedGames: 0
+    };
+
+    return `
+      <div class="admin-section">
+        <h3>Admin Tools</h3>
+        
+        <!-- Player Search -->
+        <div class="admin-search-box">
+          <input type="text" id="admin-player-search" class="admin-search-input" 
+                 placeholder="Search players by name, nickname, or email..." />
+          <div id="admin-search-results" class="admin-search-results hidden"></div>
+        </div>
+        
+        <h3>Admin Overview</h3>
+        <div class="admin-stats-grid">
+          <button class="admin-stat-btn" data-admin-view="onlinePlayers">
+            <span class="admin-stat-value">${counts.onlinePlayers}</span>
+            <span class="admin-stat-label">Online Players</span>
+          </button>
+          <button class="admin-stat-btn" data-admin-view="queuedPlayers">
+            <span class="admin-stat-value">${counts.queuedPlayers}</span>
+            <span class="admin-stat-label">Players In Queues</span>
+          </button>
+          <button class="admin-stat-btn" data-admin-view="activeGames">
+            <span class="admin-stat-value">${counts.activeGames}</span>
+            <span class="admin-stat-label">Active Games</span>
+          </button>
+          <button class="admin-stat-btn" data-admin-view="finishedGames">
+            <span class="admin-stat-value">${counts.finishedGames}</span>
+            <span class="admin-stat-label">Finished Games</span>
+          </button>
+        </div>
+        <div id="admin-detail-panel" class="admin-detail-panel"></div>
+      </div>
+    `;
+  }
+
+  updateAdminPanel() {
+    if (!this.authState?.isAdmin) return;
+
+    const panel = document.getElementById('admin-detail-panel');
+    if (!panel) return;
+
+    panel.innerHTML = '<div class="admin-detail-hint">Click a number above to view details.</div>';
+  }
+
+  renderAdminList(viewType) {
+    if (!this.adminData) {
+      return '<div class="admin-empty">No admin data loaded</div>';
+    }
+
+    if (viewType === 'onlinePlayers') {
+      const players = this.adminData.onlinePlayers || [];
+      if (players.length === 0) return '<div class="admin-empty">No online players</div>';
+      return players.map((p) => `
+        <div class="admin-item">
+          <div><strong>${p.nickname || p.name || 'Unknown'}</strong></div>
+          <div class="admin-meta">${p.email || 'anonymous'}${p.isAdmin ? ' | admin' : ''}</div>
+        </div>
+      `).join('');
+    }
+
+    if (viewType === 'queuedPlayers') {
+      const ranked = this.adminData.queueDetails?.ranked || [];
+      const unranked = this.adminData.queueDetails?.unranked || [];
+      const rows = [
+        ...ranked.map((p) => ({ ...p, queue: 'Ranked' })),
+        ...unranked.map((p) => ({ ...p, queue: 'Unranked' }))
+      ];
+      if (rows.length === 0) return '<div class="admin-empty">No players in queue</div>';
+      return rows.map((p) => `
+        <div class="admin-item">
+          <div><strong>${p.nickname || p.name || p.userId}</strong></div>
+          <div class="admin-meta">${p.queue} queue</div>
+        </div>
+      `).join('');
+    }
+
+    if (viewType === 'activeGames') {
+      const games = this.adminData.activeGames || [];
+      if (games.length === 0) return '<div class="admin-empty">No active games</div>';
+      return games.map((g) => `
+        <div class="admin-item admin-game-item">
+          <div><strong>${g.player1Name}</strong> vs <strong>${g.player2Name}</strong></div>
+          <div class="admin-meta">Score ${g.scores?.[1] || 0} - ${g.scores?.[2] || 0} | Moves: ${g.moveCount || 0}</div>
+          <button class="btn btn-secondary btn-admin-watch" data-admin-game-id="${g.id}">Watch</button>
+        </div>
+      `).join('');
+    }
+
+    if (viewType === 'finishedGames') {
+      const games = this.adminData.finishedGames || [];
+      if (games.length === 0) return '<div class="admin-empty">No finished games</div>';
+      return games.slice(0, 100).map((g) => `
+        <div class="admin-item">
+          <div><strong>${g.player1Name || 'Player 1'}</strong> vs <strong>${g.player2Name || 'Player 2'}</strong></div>
+          <div class="admin-meta">${g.player1Score || 0} - ${g.player2Score || 0}</div>
+        </div>
+      `).join('');
+    }
+
+    return '<div class="admin-empty">Unknown view</div>';
+  }
+
+  async watchActiveGame(gameId) {
+    if (!this.authState?.isAdmin || !this.authState?.userId) return;
+
+    const apiUrl = this.getApiUrl();
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/active-games/${encodeURIComponent(gameId)}?userId=${encodeURIComponent(this.authState.userId)}`);
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to load active game');
+        return;
+      }
+
+      const gameState = await response.json();
+      if (this.onResumeGame) {
+        this.onResumeGame(gameId, gameState, { spectator: true, adminView: true });
+      }
+    } catch (error) {
+      console.error('Failed to watch active game:', error);
+      alert('Failed to watch active game');
+    }
+  }
+
+  /**
+   * Search for players (admin function)
+   */
+  async searchAdminPlayers(query) {
+    if (!this.authState?.isAdmin || !this.authState?.userId) return;
+
+    const apiUrl = this.getApiUrl();
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/search-players?q=${encodeURIComponent(query)}&userId=${encodeURIComponent(this.authState.userId)}`);
+      if (!response.ok) {
+        console.error('Search failed');
+        return;
+      }
+
+      const data = await response.json();
+      this.displayAdminSearchResults(data.results || []);
+    } catch (error) {
+      console.error('Failed to search players:', error);
+    }
+  }
+
+  /**
+   * Display search results and attach event listeners
+   */
+  displayAdminSearchResults(results) {
+    const resultsDiv = document.getElementById('admin-search-results');
+    if (!resultsDiv) return;
+
+    if (results.length === 0) {
+      resultsDiv.innerHTML = '<div class="admin-search-empty">No players found</div>';
+      resultsDiv.classList.remove('hidden');
+      return;
+    }
+
+    const html = results.map(player => `
+      <div class="admin-search-result-item" data-player-id="${player.userId}">
+        <div class="admin-search-result-name">
+          <strong>${player.nickname || player.name || 'Unknown'}</strong>
+          ${player.isOnline ? '<span class="status-badge status-online">Online</span>' : '<span class="status-badge status-offline">Offline</span>'}
+          ${player.isAdmin ? '<span class="status-badge status-admin">Admin</span>' : ''}
+        </div>
+        <div class="admin-search-result-meta">
+          ${player.email || 'no email'}
+        </div>
+        <button class="btn btn-secondary btn-view-player-games" data-player-id="${player.userId}">
+          View Games
+        </button>
+      </div>
+    `).join('');
+
+    resultsDiv.innerHTML = html;
+    resultsDiv.classList.remove('hidden');
+
+    // Attach event listeners for view games buttons
+    resultsDiv.querySelectorAll('.btn-view-player-games').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const playerId = e.currentTarget.dataset.playerId;
+        this.viewAdminPlayerGames(playerId);
+      });
+    });
+  }
+
+  /**
+   * View all games for a specific player (admin function)
+   */
+  async viewAdminPlayerGames(userId) {
+    if (!this.authState?.isAdmin || !this.authState?.userId) return;
+
+    const apiUrl = this.getApiUrl();
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/player-games/${encodeURIComponent(userId)}?userId=${encodeURIComponent(this.authState.userId)}`);
+      if (!response.ok) {
+        alert('Failed to load player games');
+        return;
+      }
+
+      const playerData = await response.json();
+      this.displayAdminPlayerGames(playerData);
+    } catch (error) {
+      console.error('Failed to view player games:', error);
+      alert('Failed to view player games');
+    }
+  }
+
+  /**
+   * Display player's games in the admin detail panel
+   */
+  displayAdminPlayerGames(playerData) {
+    const panel = document.getElementById('admin-detail-panel');
+    if (!panel) return;
+
+    const games = playerData.games || [];
+    const stats = `<div class="admin-player-stats">
+      <h4>${playerData.userId}</h4>
+      <div class="admin-player-stats-grid">
+        <div>Total Games: <strong>${playerData.totalGames}</strong></div>
+        <div>Active: <strong>${playerData.activeGames}</strong></div>
+        <div>Completed: <strong>${playerData.completedGames}</strong></div>
+      </div>
+    </div>`;
+
+    if (games.length === 0) {
+      panel.innerHTML = stats + '<div class="admin-empty">No games found for this player</div>';
+      return;
+    }
+
+    const gamesList = games.map(game => {
+      const status = game.status === 'active' ? 'Active' : 'Completed';
+      const turn = game.isMyTurn ? '🔵 Your Turn' : '⚪ Their Turn';
+      const score = `${game.myScore || 0} - ${game.opponentScore || 0}`;
+      const moves = game.moveCount || 0;
+      const gridSize = game.gridSize || 10;
+
+      return `
+        <div class="admin-player-game-item">
+          <div class="game-header">
+            <span class="game-status">${status}</span>
+            <span class="game-opponent"><strong>vs ${game.opponent1Name}</strong></span>
+          </div>
+          <div class="game-info">
+            <span>Score: ${score}</span>
+            <span>Grid: ${gridSize}×${gridSize}</span>
+            <span>Moves: ${moves}</span>
+            ${game.status === 'active' ? `<span>${turn}</span>` : ''}
+          </div>
+          <button class="btn btn-secondary btn-admin-observe" data-game-id="${game.id}">
+            ${game.status === 'active' ? 'Observe' : 'Review'}
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    panel.innerHTML = stats + '<div class="admin-player-games-list">' + gamesList + '</div>';
+
+    // Attach observe button listeners
+    panel.querySelectorAll('.btn-admin-observe').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const gameId = e.currentTarget.dataset.gameId;
+        this.observeAdminGame(gameId);
+      });
+    });
+  }
+
+  /**
+   * Observe/spectate a game (admin function)
+   */
+  async observeAdminGame(gameId) {
+    if (!this.authState?.isAdmin || !this.authState?.userId) return;
+
+    const apiUrl = this.getApiUrl();
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/observe/${encodeURIComponent(gameId)}?userId=${encodeURIComponent(this.authState.userId)}`);
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to load game');
+        return;
+      }
+
+      const gameState = await response.json();
+      if (this.onResumeGame) {
+        this.onResumeGame(gameId, gameState, { spectator: true, adminView: true, observeMode: true });
+      }
+    } catch (error) {
+      console.error('Failed to observe game:', error);
+      alert('Failed to observe game');
+    }
+  }
+
   renderMatchHistory() {
     if (!this.profileData?.recentMatches || this.profileData.recentMatches.length === 0) {
       return '<p class="no-matches">No matches played yet</p>';
@@ -361,11 +692,14 @@ export class LobbyUI {
         ? `<button class="btn-replay-match" data-game-id="${match.gameId}">▶ Replay</button>`
         : '';
       
+      // Use nickname if available (privacy first), fall back to name
+      const opponentDisplay = match.opponentNickname || match.opponentName || 'Unknown';
+      
       return `
-        <div class="match-item ${resultClass}">
+        <div class="match-item ${resultClass}" data-opponent-id="${match.opponentId}">
           <div class="match-result">${resultText}</div>
           <div class="match-details">
-            <div class="match-opponent">vs ${match.opponentName}</div>
+            <div class="match-opponent clickable">vs ${opponentDisplay}</div>
             <div class="match-score">${match.myScore} - ${match.opponentScore}</div>
           </div>
           <div class="match-meta">
@@ -390,14 +724,17 @@ export class LobbyUI {
       const rankedBadge = game.isRanked ? '<span class="ranked-badge">Ranked</span>' : '';
       const gridInfo = `${game.gridSize}×${game.gridSize}`;
       
+      // Use nickname if available (privacy first), fall back to name
+      const opponentDisplay = game.opponentNickname || game.opponentName || 'Unknown';
+      
       return `
-        <div class="current-game-item ${turnClass}" data-game-id="${game.id}">
+        <div class="current-game-item ${turnClass}" data-game-id="${game.id}" data-opponent-id="${game.opponentId}">
           <div class="game-status">
             <span class="game-turn-status">${turnText}</span>
             ${rankedBadge}
           </div>
           <div class="game-opponent">
-            <strong>${game.opponentName}</strong>
+            <strong class="clickable">${opponentDisplay}</strong>
             <span class="opponent-elo">ELO: ${game.opponentRating}</span>
           </div>
           <div class="game-score">
@@ -452,6 +789,47 @@ export class LobbyUI {
         const gameId = e.target.dataset.gameId;
         this.continueGame(gameId);
       });
+    });
+
+    // Attach opponent click listeners for current games
+    this.attachOpponentClickListeners('.current-game-item');
+  }
+
+  attachOpponentClickListeners(selector) {
+    const items = document.querySelectorAll(selector);
+    items.forEach(item => {
+      const opponentLink = item.querySelector('.clickable');
+      if (opponentLink) {
+        if (opponentLink.dataset.profileBound === '1') return;
+        const opponentId = item.dataset.opponentId;
+        opponentLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (opponentId) {
+            this.playerProfile.show(opponentId, 'lobby');
+          }
+        });
+        opponentLink.dataset.profileBound = '1';
+      }
+    });
+
+    // Attach to match history items
+    const matchItems = document.querySelectorAll('.match-item');
+    matchItems.forEach(item => {
+      const opponentLink = item.querySelector('.match-opponent');
+      if (opponentLink) {
+        if (opponentLink.dataset.profileBound === '1') return;
+        const opponentId = item.dataset.opponentId;
+        opponentLink.style.cursor = 'pointer';
+        opponentLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (opponentId) {
+            this.playerProfile.show(opponentId, 'lobby');
+          }
+        });
+        opponentLink.dataset.profileBound = '1';
+      }
     });
   }
 
@@ -515,6 +893,9 @@ export class LobbyUI {
     // Attach current game continue listeners
     this.attachGameContinueListeners();
 
+    // Attach opponent click listeners (recent matches)
+    this.attachOpponentClickListeners('.match-item');
+
     // Attach replay button listeners
     document.querySelectorAll('.btn-replay-match').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -522,6 +903,42 @@ export class LobbyUI {
         this.replay.show(gameId, 1000);
       });
     });
+
+    // Admin detail views
+    document.querySelectorAll('.admin-stat-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const viewType = e.currentTarget.dataset.adminView;
+        const panel = document.getElementById('admin-detail-panel');
+        if (!panel) return;
+        panel.innerHTML = this.renderAdminList(viewType);
+
+        panel.querySelectorAll('.btn-admin-watch').forEach((watchBtn) => {
+          watchBtn.addEventListener('click', (watchEvent) => {
+            const gameId = watchEvent.currentTarget.dataset.adminGameId;
+            this.watchActiveGame(gameId);
+          });
+        });
+      });
+    });
+
+    // Admin player search
+    const searchInput = document.getElementById('admin-player-search');
+    if (searchInput) {
+      let searchTimeout;
+      searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+        
+        if (query.length < 2) {
+          document.getElementById('admin-search-results').classList.add('hidden');
+          return;
+        }
+
+        searchTimeout = setTimeout(() => {
+          this.searchAdminPlayers(query);
+        }, 300);
+      });
+    }
   }
 
   joinQueue(isRanked) {
@@ -617,13 +1034,85 @@ export class LobbyUI {
         gap: 20px;
       }
       
-      .profile-section, .queue-section, .match-history-section, .current-games-section {
+      .profile-section, .queue-section, .match-history-section, .current-games-section, .admin-section {
         background: rgba(0, 0, 0, 0.3);
         border: 2px solid rgba(255, 255, 255, 0.2);
         border-radius: 10px;
         padding: 20px;
         display: flex;
         flex-direction: column;
+      }
+
+      .admin-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .admin-stat-btn {
+        background: rgba(22, 61, 90, 0.45);
+        border: 1px solid rgba(133, 194, 255, 0.5);
+        color: #ffffff;
+        border-radius: 8px;
+        padding: 12px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+      }
+
+      .admin-stat-btn:hover {
+        background: rgba(29, 90, 133, 0.6);
+      }
+
+      .admin-stat-value {
+        font-size: 1.4em;
+        font-weight: 700;
+      }
+
+      .admin-stat-label {
+        font-size: 0.85em;
+        opacity: 0.9;
+      }
+
+      .admin-detail-panel {
+        max-height: 260px;
+        overflow-y: auto;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        padding-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .admin-detail-hint, .admin-empty {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.92em;
+      }
+
+      .admin-item {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 10px;
+      }
+
+      .admin-meta {
+        font-size: 0.82em;
+        color: rgba(255, 255, 255, 0.74);
+      }
+
+      .admin-game-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .btn-admin-watch {
+        width: fit-content;
+        padding: 6px 12px;
       }
       
       .current-games-section {
@@ -1097,6 +1586,189 @@ export class LobbyUI {
       .btn-replay-match:hover {
         background: rgba(255, 255, 255, 0.18);
         color: white;
+      }
+
+      /* Admin Search Styles */
+      .admin-search-box {
+        position: relative;
+        margin-bottom: 15px;
+      }
+
+      .admin-search-input {
+        width: 100%;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(133, 194, 255, 0.5);
+        border-radius: 6px;
+        color: white;
+        font-size: 1em;
+      }
+
+      .admin-search-input::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+      }
+
+      .admin-search-input:focus {
+        outline: none;
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(133, 194, 255, 0.8);
+        box-shadow: 0 0 10px rgba(133, 194, 255, 0.3);
+      }
+
+      .admin-search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.9);
+        border: 1px solid rgba(133, 194, 255, 0.5);
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1000;
+        margin-top: -1px;
+      }
+
+      .admin-search-results.hidden {
+        display: none;
+      }
+
+      .admin-search-empty {
+        padding: 15px;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      .admin-search-result-item {
+        padding: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .admin-search-result-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .admin-search-result-item:last-child {
+        border-bottom: none;
+      }
+
+      .admin-search-result-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+
+      .admin-search-result-name strong {
+        flex: 1;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 0.75em;
+        font-weight: bold;
+      }
+
+      .status-online {
+        background: #4CAF50;
+        color: white;
+      }
+
+      .status-offline {
+        background: #999;
+        color: white;
+      }
+
+      .status-admin {
+        background: #FF9800;
+        color: white;
+      }
+
+      .admin-search-result-meta {
+        font-size: 0.85em;
+        color: rgba(255, 255, 255, 0.6);
+        margin-bottom: 8px;
+      }
+
+      .btn-view-player-games {
+        width: 100%;
+        padding: 6px 12px;
+        font-size: 0.9em;
+      }
+
+      /* Admin Player Games Styles */
+      .admin-player-stats {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+      }
+
+      .admin-player-stats h4 {
+        margin: 0 0 10px 0;
+        color: rgba(133, 194, 255, 1);
+      }
+
+      .admin-player-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        font-size: 0.9em;
+      }
+
+      .admin-player-games-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .admin-player-game-item {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 12px;
+      }
+
+      .game-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        gap: 10px;
+      }
+
+      .game-status {
+        display: inline-block;
+        padding: 4px 8px;
+        background: rgba(133, 194, 255, 0.3);
+        border-radius: 3px;
+        font-size: 0.8em;
+        font-weight: bold;
+      }
+
+      .game-opponent {
+        flex: 1;
+        font-weight: bold;
+      }
+
+      .game-info {
+        display: flex;
+        gap: 15px;
+        font-size: 0.85em;
+        color: rgba(255, 255, 255, 0.8);
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+
+      .btn-admin-observe {
+        width: 100%;
+        padding: 8px;
+        font-size: 0.9em;
       }
     `;
     

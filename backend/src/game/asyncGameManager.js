@@ -183,21 +183,29 @@ export class AsyncGameManager {
 
     // Update ELO if ranked
     if (game.isRanked && winnerId) {
-      console.log(`Updating ELO for ranked async game: ${game.player1Name} vs ${game.player2Name}`);
+      // Use nicknames for logging (privacy first)
+      const p1DisplayName = game.player1Nickname || game.player1Name || 'Player 1';
+      const p2DisplayName = game.player2Nickname || game.player2Name || 'Player 2';
+      console.log(`Updating ELO for ranked async game: ${p1DisplayName} vs ${p2DisplayName}`);
       const result = winnerId === game.player1Id ? 1 : 0;
       this.eloService.updateRatings(game.player1Id, game.player2Id, result);
     } else {
       console.log(`Skipping ELO update for async game (isRanked: ${game.isRanked}, winnerId: ${winnerId})`);
     }
 
-    // Record match
+    // Record match - use nickname if available (privacy first), fall back to name
+    const player1Name = game.player1Nickname || game.player1Name || 'Player 1';
+    const player2Name = game.player2Nickname || game.player2Name || 'Player 2';
+    
     this.eloService.recordMatch({
       gameId: game.id,
       player1Id: game.player1Id,
-      player1Name: game.player1Name || 'Player 1',
+      player1Name,
+      player1Nickname: game.player1Nickname,
       player1Score: game.scores[1],
       player2Id: game.player2Id,
-      player2Name: game.player2Name || 'Player 2',
+      player2Name,
+      player2Nickname: game.player2Nickname,
       player2Score: game.scores[2],
       winnerId,
       isRanked: game.isRanked,

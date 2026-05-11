@@ -12,6 +12,7 @@ import { GoogleAuth } from './auth.js';
 import { skinManager } from './skins.js';
 import { notificationManager } from './notifications.js';
 import { LobbyUI } from './lobby.js';
+import { PlayerProfile } from './playerProfile.js';
 import { faviconStatus } from './faviconStatus.js';
 
 export class GameController {
@@ -36,6 +37,7 @@ export class GameController {
     this.autoShowLobbyOnLoad = false; // Flag to show lobby after initial auth
     this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     this.pendingMove = null; // Store pending move for touch confirm
+    this.playerProfile = new PlayerProfile({}, this.config.serverUrl);
 
     this.init();
   }
@@ -704,8 +706,10 @@ export class GameController {
       this.lobby = new LobbyUI(this.wsClient, {
         userId: userId,
         name: this.auth.user?.name || this.auth.getAnonymousAuthData()?.username,
-        picture: this.auth.user?.picture || null
-      }, this.config.serverUrl, (gameId, gameState) => this.resumeSavedGame(gameId, gameState));
+        picture: this.auth.user?.picture || null,
+        email: this.auth.user?.email || null,
+        isAdmin: this.auth.user?.isAdmin === true
+      }, this.config.serverUrl, (gameId, gameState, options) => this.resumeSavedGame(gameId, gameState, options));
     }
     
     // Hide menu and game container
@@ -739,8 +743,33 @@ export class GameController {
   }
 
   setupWebSocketEvents() {
-    this.wsClient.on('authenticated', (data) => {
+    this.wsClient.on('authenticated', async (data) => {
       console.log('Authenticated:', data);
+      if (this.auth && this.auth.user) {
+        this.auth.user.id = data.userId || this.auth.user.id;
+        this.auth.user.sub = data.userId || this.auth.user.sub;
+        this.auth.user.name = data.name || this.auth.user.name;
+        this.auth.user.isAdmin = data.isAdmin === true;
+        this.auth.user.role = data.role || 'player';
+        if (data.email) {
+          this.auth.user.email = data.email;
+        }
+      }
+
+      if (this.lobby) {
+        const wasAdmin = this.lobby.authState.isAdmin === true;
+        if (data.userId) this.lobby.authState.userId = data.userId;
+        if (data.name) this.lobby.authState.name = data.name;
+        this.lobby.authState.isAdmin = data.isAdmin === true;
+        this.lobby.authState.role = data.role || 'player';
+        if (data.email) this.lobby.authState.email = data.email;
+
+        // Lobby is rendered before auth_success arrives. Re-render when admin status flips.
+        if (!wasAdmin && this.lobby.authState.isAdmin) {
+          await this.lobby.loadAdminLobbyData();
+          this.lobby.render();
+        }
+      }
       // Don't auto-start matchmaking, let lobby control it
     });
 
@@ -936,8 +965,9 @@ export class GameController {
     console.log('Final currentPlayer:', this.stateMachine.currentPlayer);
   }
 
-  async resumeSavedGame(gameId, gameState) {
+  async resumeSavedGame(gameId, gameState, options = {}) {
     console.log('Resuming saved game:', gameId, gameState);
+    const isSpectator = options?.spectator === true;
     
     // Prevent multiple calls
     if (this.gameStarted) {
@@ -961,7 +991,11 @@ export class GameController {
     gameContainer.style.display = 'block';
     gameMenu.classList.add('hidden');
     shareLink.classList.add('hidden');
-    forfeitBtn.classList.remove('hidden');
+    if (isSpectator) {
+      forfeitBtn.classList.add('hidden');
+    } else {
+      forfeitBtn.classList.remove('hidden');
+    }
     
     // Set up game state
     this.stateMachine.setState(GameState.PLAYING);
@@ -970,7 +1004,7 @@ export class GameController {
     this.stateMachine.gameId = gameId;
     
     // Always reconnect WebSocket for resumed games to enable presence tracking
-    if (!this.wsClient) {
+    if (!isSpectator && !this.wsClient) {
       console.log('Reconnecting WebSocket for resumed game');
       this.wsClient = new WebSocketClient(this.config.serverUrl);
       this.setupWebSocketEvents();
@@ -1015,7 +1049,11 @@ export class GameController {
     
     // Determine which player we are
     const userId = String(this.auth.user?.sub || this.auth.user?.id || this.auth.getAnonymousAuthData()?.anonymousId || '');
-    this.stateMachine.localPlayerId = String(gameState.player1Id) === userId ? 1 : 2;
+    if (isSpectator) {
+      this.stateMachine.localPlayerId = null;
+    } else {
+      this.stateMachine.localPlayerId = String(gameState.player1Id) === userId ? 1 : 2;
+    }
     
     console.log('User ID:', userId);
     console.log('Player1 ID:', gameState.player1Id, 'Player2 ID:', gameState.player2Id);
@@ -1093,31 +1131,18 @@ export class GameController {
     // Show Back to Lobby button for async games
     backToLobbyBtn.classList.remove('hidden');
     
-    notificationManager.show('Game resumed!', 'success');
+    notificationManager.show(isSpectator ? 'Spectating game (read-only)' : 'Game resumed!', 'success');
     console.log('Game resumed successfully. Current player:', gameState.currentPlayer, 'Local player:', this.stateMachine.localPlayerId);
   }
 
   returnToLobby() {
     // Return to lobby without forfeiting the game
-    // Works for online and async games (both are saved to async storage)
-    if (this.stateMachine.mode !== GameMode.ASYNC && this.stateMachine.mode !== GameMode.ONLINE) {
-      console.log('Can only return to lobby from online/async games');
-      notificationManager.show('Cannot return to lobby from this game mode', 'error');
-      return;
-    }
     
     console.log('Returning to lobby, game will be preserved');
     
     // Notify backend we're leaving the game room before disconnecting
     if (this.wsClient && this.stateMachine.gameId) {
       this.wsClient.send({ type: 'leave_game', gameId: this.stateMachine.gameId });
-      // Give it a moment to send before disconnecting
-      setTimeout(() => {
-        if (this.wsClient) {
-          this.wsClient.disconnect();
-          this.wsClient = null;
-        }
-      }, 100);
     }
     
     // Reset game started flag
@@ -1136,7 +1161,7 @@ export class GameController {
     notificationManager.show('Game saved - you can continue later from Current Games', 'success');
   }
 
-  returnToLobbyFromGameOver() {
+  async returnToLobbyFromGameOver() {
     // Disconnect from game
     if (this.wsClient) {
       this.wsClient.disconnect();
@@ -1161,8 +1186,10 @@ export class GameController {
     this.renderer.reset();
     this.stateMachine.setState(GameState.MENU);
     
-    // Show lobby
+    // Show lobby — reconnect WebSocket so the lobby can join the queue
     if (this.lobby) {
+      await this.connectToServer(this.auth.isAnonymous());
+      this.lobby.websocket = this.wsClient;
       this.lobby.show();
     } else {
       // If no lobby, show game menu
@@ -1431,6 +1458,9 @@ export class GameController {
   }
 
   applyMove(move, playerNum, capturedDots = []) {
+    // Clear the previous move's captured dot animation
+    this.renderer.clearLastCapturedDot();
+    
     // Mark the dot as owned
     this.renderer.setDotOwner(move.x, move.y, playerNum);
     
@@ -1561,14 +1591,14 @@ export class GameController {
     
     let winnerText;
     if (data && data.forfeit) {
-      const forfeiterName = this.stateMachine.players[data.forfeiter].name;
+      const forfeiterName = this.stateMachine.players[data.forfeiter].nickname || this.stateMachine.players[data.forfeiter].name;
       const winnerId = data.forfeiter === 1 ? 2 : 1;
-      const winnerName = this.stateMachine.players[winnerId].name;
+      const winnerName = this.stateMachine.players[winnerId].nickname || this.stateMachine.players[winnerId].name;
       winnerText = `${winnerName} wins! (${forfeiterName} forfeited)`;
     } else if (data && (data.resigned || data.winner)) {
       const winnerId = data.winner;
       if (winnerId === 1 || winnerId === 2) {
-        const winnerName = this.stateMachine.players[winnerId].name;
+        const winnerName = this.stateMachine.players[winnerId].nickname || this.stateMachine.players[winnerId].name;
         winnerText = `${winnerName} wins!`;
       } else {
         winnerText = "It's a draw!";
@@ -1576,13 +1606,13 @@ export class GameController {
     } else if (winner === null) {
       winnerText = "It's a draw!";
     } else {
-      const winnerName = this.stateMachine.players[winner].name;
+      const winnerName = this.stateMachine.players[winner].nickname || this.stateMachine.players[winner].name;
       winnerText = `${winnerName} wins!`;
     }
     
     document.getElementById('winner-text').textContent = winnerText;
     document.getElementById('final-scores').textContent = 
-      `${this.stateMachine.players[1].name}: ${p1Score} | ${this.stateMachine.players[2].name}: ${p2Score}`;
+      `${this.stateMachine.players[1].nickname || this.stateMachine.players[1].name}: ${p1Score} | ${this.stateMachine.players[2].nickname || this.stateMachine.players[2].name}: ${p2Score}`;
     
     // Show/hide buttons based on game mode
     const rematchBtn = document.getElementById('btn-rematch');
@@ -1703,8 +1733,31 @@ export class GameController {
     console.log('Player 2 data:', this.stateMachine.players[2]);
     
     // Use nickname if available, otherwise use name
-    p1Card.querySelector('.player-name').textContent = this.stateMachine.players[1].nickname || this.stateMachine.players[1].name;
-    p2Card.querySelector('.player-name').textContent = this.stateMachine.players[2].nickname || this.stateMachine.players[2].name;
+    const p1NameEl = p1Card.querySelector('.player-name');
+    const p2NameEl = p2Card.querySelector('.player-name');
+    p1NameEl.textContent = this.stateMachine.players[1].nickname || this.stateMachine.players[1].name;
+    p2NameEl.textContent = this.stateMachine.players[2].nickname || this.stateMachine.players[2].name;
+
+    // Allow opening opponent profile from active game by clicking opponent nickname.
+    // Only enable for online/async games where local player and opponent IDs are known.
+    p1NameEl.style.cursor = 'default';
+    p2NameEl.style.cursor = 'default';
+    p1NameEl.onclick = null;
+    p2NameEl.onclick = null;
+    if ((this.stateMachine.mode === GameMode.ONLINE || this.stateMachine.mode === GameMode.ASYNC)
+      && (this.stateMachine.localPlayerId === 1 || this.stateMachine.localPlayerId === 2)) {
+      const opponentNum = this.stateMachine.localPlayerId === 1 ? 2 : 1;
+      const opponentNameEl = opponentNum === 1 ? p1NameEl : p2NameEl;
+      const opponent = this.stateMachine.players[opponentNum];
+      if (opponent?.id) {
+        opponentNameEl.style.cursor = 'pointer';
+        opponentNameEl.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.playerProfile.show(opponent.id, 'game');
+        };
+      }
+    }
     
     // Update player card colors based on their skins
     const p1SkinInfo = skinManager.getPlayerSkinInfo(1);

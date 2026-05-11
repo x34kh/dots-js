@@ -65,6 +65,7 @@ metadata:
   name: dots-backend
   namespace: dots-production
 spec:
+  type: NodePort
   selector:
     app: dots-backend
   sessionAffinity: ClientIP
@@ -74,3 +75,4 @@ spec:
   ports:
     - port: 8080
       targetPort: 8080
+      nodePort: 30082

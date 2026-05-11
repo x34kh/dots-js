@@ -13,8 +13,30 @@ export class AuthService {
     this.redis = redisClient;
     this.users = new Map(); // userId -> user data
     this.USERS_KEY = 'dots:auth:users';
+    this.adminEmails = this.parseAdminEmails();
     // Secret key for signing anonymous tokens - should be from environment in production
     this.anonymousSecret = process.env.ANONYMOUS_SECRET || 'dots-js-anonymous-secret-key-2024';
+  }
+
+  parseAdminEmails() {
+    const configured = process.env.ADMIN_EMAILS || '';
+    const parsed = configured
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+
+    // Explicitly requested bootstrap admin.
+    parsed.push('alexander@nixsupport.net');
+    return new Set(parsed);
+  }
+
+  isAdminEmail(email) {
+    return !!email && this.adminEmails.has(String(email).toLowerCase());
+  }
+
+  isAdmin(user) {
+    if (!user) return false;
+    return user.role === 'admin' || user.isAdmin === true;
   }
 
   async init() {
@@ -59,13 +81,17 @@ export class AuthService {
       
       const payload = ticket.getPayload();
       
+      const existingUser = this.users.get(payload.sub);
       const user = {
         id: payload.sub,
         email: payload.email,
         name: payload.name,
         picture: payload.picture,
         verified: payload.email_verified,
-        nickname: this.users.get(payload.sub)?.nickname || this.generateUniqueNickname()
+        role: this.isAdminEmail(payload.email) ? 'admin' : 'player',
+        isAdmin: this.isAdminEmail(payload.email),
+        nickname: existingUser?.nickname || this.generateUniqueNickname(),
+        lastOnline: new Date()
       };
 
       // Store/update user
@@ -95,7 +121,10 @@ export class AuthService {
           picture: payload.picture || null,
           verified: true,
           isDev: true,
-          nickname: this.generateUniqueNickname()
+          role: this.isAdminEmail(payload.email) ? 'admin' : 'player',
+          isAdmin: this.isAdminEmail(payload.email),
+          nickname: this.generateUniqueNickname(),
+          lastOnline: new Date()
         };
         this.users.set(user.id, user);
         this.persistUsers();
@@ -113,7 +142,10 @@ export class AuthService {
       picture: null,
       verified: true,
       isDev: true,
-      nickname: this.generateUniqueNickname()
+      role: 'player',
+      isAdmin: false,
+      nickname: this.generateUniqueNickname(),
+      lastOnline: new Date()
     };
     this.users.set(user.id, user);
     this.persistUsers();
@@ -125,6 +157,13 @@ export class AuthService {
    */
   getUser(userId) {
     return this.users.get(userId);
+  }
+
+  /**
+   * Get all users
+   */
+  getAllUsers() {
+    return Array.from(this.users.values());
   }
 
   /**
@@ -183,7 +222,10 @@ export class AuthService {
       email: null,
       picture: null,
       isAnonymous: true,
-      nickname: username // Anonymous users use their generated name as nickname
+      role: 'player',
+      isAdmin: false,
+      nickname: username, // Anonymous users use their generated name as nickname
+      lastOnline: new Date()
     };
 
     this.users.set(anonymousId, user);

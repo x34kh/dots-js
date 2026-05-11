@@ -1,9 +1,14 @@
-# Backend Dockerfile - Fast deployment version
-# Uses pre-built base image with dependencies installed
+# Backend Dockerfile
 
-FROM ghcr.io/x34kh/dots-js-backend-base:latest
+FROM node:18-alpine
 
 WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm install --production
 
 # Copy application source code
 COPY src ./src

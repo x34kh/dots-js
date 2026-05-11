@@ -161,9 +161,11 @@ export class EloService {
       gameId: matchData.gameId,
       player1Id: matchData.player1Id,
       player1Name: matchData.player1Name,
+      player1Nickname: matchData.player1Nickname,
       player1Score: matchData.player1Score,
       player2Id: matchData.player2Id,
       player2Name: matchData.player2Name,
+      player2Nickname: matchData.player2Nickname,
       player2Score: matchData.player2Score,
       winnerId: matchData.winnerId,
       isRanked: matchData.isRanked || false,
@@ -217,11 +219,17 @@ export class EloService {
         const won = match.winnerId === userId;
         const draw = match.winnerId === null;
         
+        // Use nickname if available (privacy first), fall back to name
+        const opponentNickname = isPlayer1 
+          ? (match.player2Nickname || match.player2Name)
+          : (match.player1Nickname || match.player1Name);
+        
         return {
           id: match.id,
           gameId: match.gameId,
           opponentId: isPlayer1 ? match.player2Id : match.player1Id,
-          opponentName: isPlayer1 ? match.player2Name : match.player1Name,
+          opponentName: opponentNickname,
+          opponentNickname: isPlayer1 ? match.player2Nickname : match.player1Nickname,
           myScore: isPlayer1 ? match.player1Score : match.player2Score,
           opponentScore: isPlayer1 ? match.player2Score : match.player1Score,
           result: draw ? 'draw' : (won ? 'win' : 'loss'),

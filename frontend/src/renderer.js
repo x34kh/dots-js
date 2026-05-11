@@ -35,6 +35,11 @@ export class GameRenderer {
     this.pulsingDot = null; // key: "x,y"
     this.pulseTime = 0;
     
+    // Animation for last captured dot
+    this.lastCapturedDot = null; // key: "x,y"
+    this.lastCapturedDotTime = 0;
+    this.lastCapturedDotIntensity = 1.0; // Controls the brightness of the blink
+    
     // Use skin manager for player colors
     this.playerColors = skinManager.getPlayerColors();
     
@@ -638,6 +643,13 @@ export class GameRenderer {
       }
     }
     
+    // Track the first (or most recent) captured dot for blinking animation
+    if (capturedDots.length > 0) {
+      this.lastCapturedDot = `${capturedDots[0].x},${capturedDots[0].y}`;
+      this.lastCapturedDotTime = 0;
+      this.lastCapturedDotIntensity = 1.0;
+    }
+    
     // Create capture area visualization
     if (capturedDots.length > 0) {
       this.createCapturedAreaMesh(capturedDots, playerNum);
@@ -1002,6 +1014,16 @@ export class GameRenderer {
   }
 
   /**
+   * Clear the last captured dot animation
+   * Call this when a new move is made
+   */
+  clearLastCapturedDot() {
+    this.lastCapturedDot = null;
+    this.lastCapturedDotTime = 0;
+    this.lastCapturedDotIntensity = 1.0;
+  }
+
+  /**
    * Update all dot animations for smooth transitions
    */
   updateDotAnimations() {
@@ -1015,6 +1037,26 @@ export class GameRenderer {
       if (anim) {
         anim.targetScale = 1.4 * pulseScale;
         anim.targetEmissiveIntensity = pulseIntensity;
+      }
+    }
+    
+    // Update blink animation for last captured dot
+    if (this.lastCapturedDot) {
+      this.lastCapturedDotTime += 0.05;
+      // Blink effect: oscillate between 0.3 and 1.0
+      // Use a slower, smoother sine wave for a nice blinking effect
+      this.lastCapturedDotIntensity = 0.65 + Math.sin(this.lastCapturedDotTime * 2) * 0.35;
+      
+      const anim = this.dotAnimations.get(this.lastCapturedDot);
+      const mesh = this.dotMeshes.get(this.lastCapturedDot);
+      
+      if (anim && mesh && mesh.userData.captured) {
+        // Enhance the glow of the captured dot by increasing its emissive intensity
+        anim.targetEmissiveIntensity = 0.3 + this.lastCapturedDotIntensity * 0.5;
+        
+        // Optional: Add a subtle size pulse as well
+        const sizeMultiplier = 0.85 + this.lastCapturedDotIntensity * 0.3;
+        anim.targetScale = 0.7 * sizeMultiplier;
       }
     }
     

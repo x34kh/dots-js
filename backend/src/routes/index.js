@@ -27,6 +27,30 @@ const anonCreateLimiter = rateLimit({
 export function createRouter(authService, gameManager, eloService, asyncGameManager, wsHandler) {
   const router = Router();
 
+  function getRequestUserId(req) {
+    return req.query.userId || req.body?.userId || req.headers['x-user-id'];
+  }
+
+  function requireAdmin(req, res) {
+    const userId = getRequestUserId(req);
+    if (!userId) {
+      req.logger?.warn({ action: 'admin_access_denied', reason: 'missing_user_id' }, 'Admin access denied');
+      res.status(401).json({ error: 'userId is required' });
+      return null;
+    }
+
+    const user = authService.getUser(String(userId));
+    if (!authService.isAdmin(user)) {
+      req.logger?.warn({ action: 'admin_access_denied', reason: 'not_admin', userId: String(userId), email: user?.email || null }, 'Admin access denied');
+      res.status(403).json({ error: 'Admin access required' });
+      return null;
+    }
+
+    req.logger?.info({ action: 'admin_access_granted', userId: String(userId), email: user?.email || null }, 'Admin access granted');
+
+    return user;
+  }
+
   // Authentication routes
   router.post('/auth/verify', authLimiter, async (req, res) => {
     const { token } = req.body;
@@ -127,6 +151,7 @@ export function createRouter(authService, gameManager, eloService, asyncGameMana
     res.json({
       ...stats,
       nickname: nickname,
+      lastOnline: user?.lastOnline || null,
       recentMatches: matches
     });
   });
@@ -194,6 +219,237 @@ export function createRouter(authService, gameManager, eloService, asyncGameMana
       winnerId: match.winnerId,
       moves: match.moves || []
     });
+  });
+
+  // Admin lobby overview
+  router.get('/admin/lobby', (req, res) => {
+    const adminUser = requireAdmin(req, res);
+    if (!adminUser) return;
+
+    const onlinePlayers = [];
+    if (wsHandler?.clients) {
+      for (const client of wsHandler.clients.values()) {
+        if (!client?.user) continue;
+        onlinePlayers.push({
+          userId: client.userId,
+          name: client.user.name,
+          nickname: client.user.nickname || null,
+          email: client.user.email || null,
+          isAnonymous: client.user.isAnonymous === true,
+          isAdmin: client.user.isAdmin === true
+        });
+      }
+    }
+
+    const queueDetails = {
+      ranked: gameManager.rankedQueue.map((entry) => ({
+        userId: entry.playerId,
+        name: entry.playerData?.name || 'Unknown',
+        nickname: entry.playerData?.nickname || null,
+        joinedAt: entry.joinedAt
+      })),
+      unranked: gameManager.unrankedQueue.map((entry) => ({
+        userId: entry.playerId,
+        name: entry.playerData?.name || 'Unknown',
+        nickname: entry.playerData?.nickname || null,
+        joinedAt: entry.joinedAt
+      }))
+    };
+
+    const activeGames = Array.from(asyncGameManager.games.values())
+      .filter((game) => game.status === 'active')
+      .map((game) => ({
+        id: game.id,
+        player1Id: game.player1Id,
+        player1Name: game.player1Nickname || game.player1Name || game.player1Id,
+        player2Id: game.player2Id,
+        player2Name: game.player2Nickname || game.player2Name || game.player2Id,
+        currentPlayer: game.currentPlayer,
+        scores: game.scores,
+        moveCount: game.moves?.length || 0,
+        isRanked: game.isRanked,
+        createdAt: game.createdAt,
+        lastMoveAt: game.lastMoveAt,
+        turnDeadline: game.turnDeadline
+      }))
+      .sort((a, b) => (b.lastMoveAt || 0) - (a.lastMoveAt || 0));
+
+    const finishedGames = [...eloService.matches]
+      .slice(-200)
+      .reverse()
+      .map((match) => ({
+        gameId: match.gameId,
+        player1Name: match.player1Nickname || match.player1Name,
+        player2Name: match.player2Nickname || match.player2Name,
+        player1Score: match.player1Score,
+        player2Score: match.player2Score,
+        winnerId: match.winnerId,
+        isRanked: match.isRanked,
+        completedAt: match.completedAt
+      }));
+
+    res.json({
+      admin: {
+        userId: adminUser.id,
+        email: adminUser.email,
+        name: adminUser.name
+      },
+      counts: {
+        onlinePlayers: onlinePlayers.length,
+        rankedQueue: queueDetails.ranked.length,
+        unrankedQueue: queueDetails.unranked.length,
+        queuedPlayers: queueDetails.ranked.length + queueDetails.unranked.length,
+        activeGames: activeGames.length,
+        finishedGames: finishedGames.length
+      },
+      onlinePlayers,
+      queueDetails,
+      activeGames,
+      finishedGames
+    });
+  });
+
+  router.get('/admin/active-games/:gameId', (req, res) => {
+    const adminUser = requireAdmin(req, res);
+    if (!adminUser) return;
+
+    const game = asyncGameManager.games.get(req.params.gameId);
+    if (!game) {
+      return res.status(404).json({ error: 'Active game not found' });
+    }
+
+    if (game.status !== 'active') {
+      return res.status(400).json({ error: 'Game is not active' });
+    }
+
+    // Admin spectator view of actual game state (read-only on frontend).
+    res.json({
+      ...game,
+      adminView: true
+    });
+  });
+
+  // Admin: Search for players by name, nickname, or email
+  router.get('/admin/search-players', (req, res) => {
+    const adminUser = requireAdmin(req, res);
+    if (!adminUser) return;
+
+    const query = (req.query.q || '').toLowerCase().trim();
+    if (query.length < 2) {
+      return res.status(400).json({ error: 'Search query must be at least 2 characters' });
+    }
+
+    const results = [];
+    const maxResults = 20;
+
+    // Search in online players
+    if (wsHandler?.clients) {
+      for (const client of wsHandler.clients.values()) {
+        if (!client?.user) continue;
+        
+        const name = (client.user.name || '').toLowerCase();
+        const nickname = (client.user.nickname || '').toLowerCase();
+        const email = (client.user.email || '').toLowerCase();
+        
+        if (name.includes(query) || nickname.includes(query) || email.includes(query)) {
+          results.push({
+            userId: client.userId,
+            name: client.user.name,
+            nickname: client.user.nickname,
+            email: client.user.email,
+            isOnline: true,
+            isAnonymous: client.user.isAnonymous === true,
+            isAdmin: client.user.isAdmin === true
+          });
+          
+          if (results.length >= maxResults) break;
+        }
+      }
+    }
+
+    // Also search in auth service (offline players)
+    if (results.length < maxResults) {
+      const allUsers = authService.getAllUsers?.() || [];
+      for (const user of allUsers) {
+        if (results.some(r => r.userId === user.id)) continue; // Skip already added
+        
+        const name = (user.name || '').toLowerCase();
+        const nickname = (user.nickname || '').toLowerCase();
+        const email = (user.email || '').toLowerCase();
+        
+        if (name.includes(query) || nickname.includes(query) || email.includes(query)) {
+          results.push({
+            userId: user.id,
+            name: user.name,
+            nickname: user.nickname,
+            email: user.email,
+            isOnline: false,
+            isAnonymous: user.isAnonymous === true,
+            isAdmin: user.isAdmin === true
+          });
+          
+          if (results.length >= maxResults) break;
+        }
+      }
+    }
+
+    res.json({ results });
+  });
+
+  // Admin: Get all games for a specific player (active and pending async games)
+  router.get('/admin/player-games/:userId', (req, res) => {
+    const adminUser = requireAdmin(req, res);
+    if (!adminUser) return;
+
+    const userId = req.params.userId;
+    
+    // Get async games (turn-based)
+    const asyncGames = asyncGameManager.getPlayerGames(userId).map(game => ({
+      ...game,
+      gameType: 'async',
+      opponent1Id: game.opponentId,
+      // Use opponentNickname if available (privacy first), fall back to opponentName
+      opponent1Name: game.opponentNickname || game.opponentName,
+      opponent2Id: undefined,
+      opponent2Name: undefined,
+      myScore: game.myScore,
+      opponentScore: game.opponentScore,
+      isMyTurn: game.isMyTurn
+    }));
+
+    // Get real-time games (if we had an active games manager, it would go here)
+    // For now, we only have async games
+
+    const allGames = [
+      ...asyncGames
+    ].sort((a, b) => (b.lastMoveAt || 0) - (a.lastMoveAt || 0));
+
+    res.json({
+      userId,
+      games: allGames,
+      totalGames: allGames.length,
+      activeGames: allGames.filter(g => g.status === 'active').length,
+      completedGames: allGames.filter(g => g.status === 'completed').length
+    });
+  });
+
+  // Admin: Observe/spectate a player's game (supports both async and real-time)
+  router.get('/admin/observe/:gameId', (req, res) => {
+    const adminUser = requireAdmin(req, res);
+    if (!adminUser) return;
+
+    // Try to find in async games first
+    const asyncGame = asyncGameManager.games.get(req.params.gameId);
+    if (asyncGame) {
+      return res.json({
+        ...asyncGame,
+        adminView: true,
+        gameType: 'async'
+      });
+    }
+
+    // Could extend to support real-time games here
+    return res.status(404).json({ error: 'Game not found' });
   });
 
   // Async/Turn-based game routes

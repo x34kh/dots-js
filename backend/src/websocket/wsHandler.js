@@ -4,39 +4,67 @@
  */
 
 export class WebSocketHandler {
-  constructor(wss, authService, gameManager, asyncGameManager) {
+  constructor(wss, authService, gameManager, asyncGameManager, logger = null) {
     this.wss = wss;
     this.authService = authService;
     this.gameManager = gameManager;
     this.asyncGameManager = asyncGameManager;
+    this.logger = logger || {
+      child: () => this.logger,
+      info: console.log,
+      warn: console.warn,
+      error: console.error,
+      debug: console.debug
+    };
     this.clients = new Map(); // ws -> { userId, user }
     this.userSockets = new Map(); // userId -> ws
     this.gameToAsync = new Map(); // realtime gameId -> async gameId
     this.gameRooms = new Map(); // gameId -> Set of userIds
+    this.socketMeta = new Map(); // ws -> { socketId, connectedAt, clientIp, userAgent }
+    this.socketIdCounter = 0;
 
     this.setupServer();
   }
 
   setupServer() {
-    this.wss.on('connection', (ws) => {
-      console.log('Client connected');
+    this.wss.on('connection', (ws, req) => {
+      const socketId = `ws-${++this.socketIdCounter}`;
+      const clientIp = req?.headers?.['cf-connecting-ip']
+        || (req?.headers?.['x-forwarded-for'] ? String(req.headers['x-forwarded-for']).split(',')[0].trim() : null)
+        || req?.socket?.remoteAddress
+        || 'unknown';
+      const userAgent = req?.headers?.['user-agent'] || null;
+
+      this.socketMeta.set(ws, {
+        socketId,
+        connectedAt: Date.now(),
+        clientIp,
+        userAgent
+      });
+
+      this.logger.info({ action: 'ws_connect', socketId, clientIp, userAgent }, 'WebSocket connected');
 
       ws.on('message', (data) => {
         try {
           const message = JSON.parse(data.toString());
+          this.logger.debug({
+            action: 'ws_message_received',
+            socketId,
+            messageType: message?.type || 'unknown'
+          }, 'WebSocket message received');
           this.handleMessage(ws, message);
         } catch (error) {
-          console.error('Failed to parse message:', error);
+          this.logger.error({ action: 'ws_parse_failed', socketId, error: error.message || String(error) }, 'Failed to parse message');
           this.sendError(ws, 'Invalid message format');
         }
       });
 
-      ws.on('close', () => {
-        this.handleDisconnect(ws);
+      ws.on('close', (code, reasonBuffer) => {
+        this.handleDisconnect(ws, code, reasonBuffer?.toString());
       });
 
       ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
+        this.logger.error({ action: 'ws_error', socketId, error: error.message || String(error) }, 'WebSocket error');
       });
     });
   }
@@ -80,18 +108,31 @@ export class WebSocketHandler {
 
   async handleAuth(ws, message) {
     const result = await this.authService.verifyToken(message.token);
+    const meta = this.socketMeta.get(ws) || {};
 
     if (result.success) {
       this.clients.set(ws, { userId: result.user.id, user: result.user });
       this.userSockets.set(result.user.id, ws);
+
+      this.logger.info({
+        action: 'ws_auth_success',
+        socketId: meta.socketId,
+        userId: result.user.id,
+        email: result.user.email || null,
+        role: result.user.role || 'player',
+        isAdmin: result.user.isAdmin === true
+      }, 'WebSocket authentication success');
 
       this.send(ws, {
         type: 'auth_success',
         data: {
           userId: result.user.id,
           name: result.user.name,
+          email: result.user.email || null,
           nickname: result.user.nickname,
-          picture: result.user.picture
+          picture: result.user.picture,
+          role: result.user.role || 'player',
+          isAdmin: result.user.isAdmin === true
         }
       });
       
@@ -99,6 +140,11 @@ export class WebSocketHandler {
       this.broadcastQueueStats();
       this.syncPresenceForUser(result.user.id);
     } else {
+      this.logger.warn({
+        action: 'ws_auth_failed',
+        socketId: meta.socketId,
+        error: result.error
+      }, 'WebSocket authentication failed');
       this.send(ws, {
         type: 'auth_error',
         error: result.error
@@ -111,6 +157,8 @@ export class WebSocketHandler {
     const { anonymousId, username, signature } = message;
     
     if (!anonymousId || !username || !signature) {
+      const meta = this.socketMeta.get(ws) || {};
+      this.logger.warn({ action: 'ws_auth_anonymous_invalid', socketId: meta.socketId }, 'Invalid anonymous credentials');
       this.send(ws, {
         type: 'auth_error',
         error: 'Invalid anonymous credentials'
@@ -122,6 +170,8 @@ export class WebSocketHandler {
     const isValid = this.authService.verifyAnonymousToken(anonymousId, username, signature);
     
     if (!isValid) {
+      const meta = this.socketMeta.get(ws) || {};
+      this.logger.warn({ action: 'ws_auth_anonymous_signature_invalid', socketId: meta.socketId }, 'Invalid anonymous signature');
       this.send(ws, {
         type: 'auth_error',
         error: 'Invalid anonymous token signature'
@@ -133,11 +183,16 @@ export class WebSocketHandler {
       id: anonymousId,
       name: username,
       picture: null,
-      isAnonymous: true
+      isAnonymous: true,
+      role: 'player',
+      isAdmin: false,
+      email: null
     };
 
     this.clients.set(ws, { userId: anonymousId, user });
     this.userSockets.set(anonymousId, ws);
+    const meta = this.socketMeta.get(ws) || {};
+    this.logger.info({ action: 'ws_auth_anonymous_success', socketId: meta.socketId, userId: anonymousId }, 'Anonymous websocket auth success');
 
     this.send(ws, {
       type: 'auth_success',
@@ -145,7 +200,10 @@ export class WebSocketHandler {
         userId: anonymousId,
         name: username,
         picture: null,
-        isAnonymous: true
+        isAnonymous: true,
+        role: 'player',
+        isAdmin: false,
+        email: null
       }
     });
     
@@ -196,6 +254,9 @@ export class WebSocketHandler {
       return;
     }
 
+    const meta = this.socketMeta.get(ws) || {};
+    this.logger.info({ action: 'game_join_attempt', socketId: meta.socketId, userId: client.userId, gameId }, 'Player attempting to join game');
+
     // Try to join or rejoin the game in realtime gameManager
     let result = this.gameManager.joinGame(gameId, client.userId, {
       name: client.user.name,
@@ -205,12 +266,12 @@ export class WebSocketHandler {
 
     // If game not found in realtime, check if it's an async game
     if (!result.success && result.error === 'Game not found') {
-      console.log(`Game ${gameId} not in realtime manager, checking async...`);
+      this.logger.debug({ action: 'game_join_realtime_missing', userId: client.userId, gameId }, 'Realtime game not found, checking async manager');
       
       // Get async game state
       const asyncGame = this.asyncGameManager.games.get(gameId);
       if (asyncGame) {
-        console.log(`Found async game ${gameId}, creating room for presence tracking`);
+        this.logger.debug({ action: 'game_join_async_found', userId: client.userId, gameId }, 'Found async game while joining');
         
         // Determine player number
         const isPlayer1 = asyncGame.player1Id === client.userId;
@@ -244,6 +305,7 @@ export class WebSocketHandler {
         const isPlayer2 = game.players[2]?.id === client.userId;
         
         if (isPlayer1 || isPlayer2) {
+          this.logger.info({ action: 'game_rejoin_allowed', userId: client.userId, gameId }, 'Allowing game rejoin for existing player');
           // Player is rejoining - allow it
           result = {
             success: true,
@@ -262,7 +324,13 @@ export class WebSocketHandler {
       }
       this.gameRooms.get(gameId).add(client.userId);
       
-      console.log(`Player ${client.userId} joined/rejoined game ${gameId} as player ${result.playerNumber}`);
+      this.logger.info({
+        action: 'game_join_success',
+        userId: client.userId,
+        gameId,
+        playerNumber: result.playerNumber,
+        socketId: meta.socketId
+      }, 'Player joined or rejoined game');
       console.log(`Game room ${gameId} now has players:`, Array.from(this.gameRooms.get(gameId)));
       console.log(`userSockets has:`, Array.from(this.userSockets.keys()));
       console.log(`Player ${client.userId} socket exists:`, this.userSockets.has(client.userId));
@@ -295,6 +363,7 @@ export class WebSocketHandler {
       // Notify about player presence
       this.broadcastPresenceUpdate(gameId);
     } else {
+      this.logger.warn({ action: 'game_join_failed', userId: client.userId, gameId, error: result.error }, 'Failed to join game');
       this.sendError(ws, result.error);
     }
   }
@@ -663,10 +732,18 @@ export class WebSocketHandler {
     }
   }
 
-  handleDisconnect(ws) {
+  handleDisconnect(ws, closeCode = null, closeReason = null) {
     const client = this.clients.get(ws);
+    const meta = this.socketMeta.get(ws) || {};
     if (client) {
-      console.log('Client disconnected:', client.userId);
+      this.logger.info({
+        action: 'ws_disconnect',
+        socketId: meta.socketId,
+        userId: client.userId,
+        closeCode,
+        closeReason: closeReason || null,
+        connectedDurationMs: meta.connectedAt ? Date.now() - meta.connectedAt : null
+      }, 'Client disconnected');
 
       // Remove from game rooms and notify
       for (const [gameId, players] of this.gameRooms.entries()) {
@@ -698,6 +775,7 @@ export class WebSocketHandler {
         const hasAsyncVersion = this.gameToAsync.has(gameId);
         
         if (hasAsyncVersion) {
+          this.logger.info({ action: 'disconnect_async_enabled_game', userId: client.userId, gameId }, 'Disconnect detected for async-enabled game');
           // Game is saved to async - don't end it, just notify opponent
           console.log(`Player ${client.userId} disconnected from async-enabled game ${gameId}`);
           const game = this.gameManager.getGame(gameId);
@@ -713,6 +791,7 @@ export class WebSocketHandler {
             }
           }
         } else {
+          this.logger.info({ action: 'disconnect_realtime_game', userId: client.userId, gameId }, 'Disconnect detected for realtime-only game');
           // Not async - handle disconnect normally (end game)
           const result = this.gameManager.handleDisconnect(client.userId);
           if (result && result.gameId) {
@@ -734,11 +813,24 @@ export class WebSocketHandler {
       // Remove from matchmaking
       this.gameManager.removeFromMatchmaking(client.userId);
 
+      // Track last online timestamp
+      this.authService.updateUser(client.userId, { lastOnline: new Date() });
+
       this.userSockets.delete(client.userId);
       this.clients.delete(ws);
+      this.socketMeta.delete(ws);
       
       // Broadcast updated online count
       this.broadcastQueueStats();
+    } else {
+      this.logger.info({
+        action: 'ws_disconnect_unauthenticated',
+        socketId: meta.socketId,
+        closeCode,
+        closeReason: closeReason || null,
+        connectedDurationMs: meta.connectedAt ? Date.now() - meta.connectedAt : null
+      }, 'Unauthenticated websocket disconnected');
+      this.socketMeta.delete(ws);
     }
   }
 
@@ -748,7 +840,13 @@ export class WebSocketHandler {
         ws.send(JSON.stringify(message));
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      const meta = this.socketMeta.get(ws) || {};
+      this.logger.error({
+        action: 'ws_send_failed',
+        socketId: meta.socketId,
+        messageType: message?.type || 'unknown',
+        error: error.message || String(error)
+      }, 'Error sending websocket message');
     }
   }
 

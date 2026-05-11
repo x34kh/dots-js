@@ -50,6 +50,34 @@ docker-compose up frontend
 docker-compose up backend
 ```
 
+### Server Control Scripts
+
+Use the helper scripts at repository root to manage the game server services:
+
+```bash
+# Start in the same mode currently used by the app (auto-detect)
+./start-server.sh
+
+# Stop in current mode
+./stop-server.sh
+
+# Restart in current mode
+./restart-server.sh
+
+# Include frontend as well
+./start-server.sh --all
+./stop-server.sh --all
+./restart-server.sh --all
+
+# Rebuild images when starting/restarting
+./start-server.sh --build
+./restart-server.sh --build
+
+# Optional explicit mode override
+./start-server.sh --mode=compose
+./start-server.sh --mode=process
+```
+
 ## Game Rules
 
 1. **Board**: 5x5 grid of dots
